@@ -22,7 +22,7 @@ export default function ProblemSection() {
             Are you ready when they do?
           </h2>
           <p className="text-lg text-[#9AA6C4] mb-10 max-w-lg">
-            Network latency, third-party downtimes, and unexpected traffic spikes cause cascading failures in modern microservices. You can't rely on hoping things just work.
+            Network latency, third-party downtimes, and unexpected traffic spikes cause cascading failures in modern microservices. You can&apos;t rely on hoping things just work.
           </p>
           
           <div className="space-y-6">

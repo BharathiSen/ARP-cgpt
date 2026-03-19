@@ -9,6 +9,10 @@ export async function runRealSimulation(projectId: string, endpoint: string) {
   try {
     const response = await fetch(endpoint, {
       method: 'GET',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/json,text/plain',
+      },
       // Using an AbortController for older Node versions compatibility
       signal: AbortSignal.timeout ? AbortSignal.timeout(10000) : undefined
     });
@@ -22,10 +26,10 @@ export async function runRealSimulation(projectId: string, endpoint: string) {
       isFailed = true;
       statusCode = 408; // Timeout
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     actualLatency = Date.now() - startTime;
     isFailed = true;
-    if (err.name === 'TimeoutError' || err.name === 'AbortError') {
+    if (err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
       statusCode = 408;
     } else {
       statusCode = 500;
@@ -38,6 +42,10 @@ export async function runRealSimulation(projectId: string, endpoint: string) {
   if (isFailed) {
     if (statusCode === 408) {
       insight = `Endpoint timed out (>${actualLatency}ms). Suggest increasing API timeouts or vertically scaling the backend.`;
+    } else if (statusCode === 401 || statusCode === 403) {
+      insight = `Endpoint returned HTTP ${statusCode} (Unauthorized/Forbidden). Ensure your testing agent passes required Authentication headers or tokens.`;
+    } else if (statusCode === 429) {
+      insight = `Endpoint returned HTTP 429 (Too Many Requests). A Rate Limit or WAF (like Cloudflare) is blocking the test.`;
     } else {
       insight = `Endpoint returned HTTP ${statusCode}. Suggest implementing retry with exponential backoff and circuit breakers.`;
     }

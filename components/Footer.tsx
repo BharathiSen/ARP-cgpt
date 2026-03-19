@@ -32,28 +32,28 @@ export default function Footer() {
           <div>
             <h4 className="text-white font-semibold mb-6">Product</h4>
             <ul className="space-y-4">
-              <li><Link href="#" className="text-[#9AA6C4] hover:text-white transition-colors text-sm">Features</Link></li>
-              <li><Link href="#" className="text-[#9AA6C4] hover:text-white transition-colors text-sm">Integrations</Link></li>
-              <li><Link href="#" className="text-[#9AA6C4] hover:text-white transition-colors text-sm">Pricing</Link></li>
-              <li><Link href="#" className="text-[#9AA6C4] hover:text-white transition-colors text-sm">Changelog</Link></li>
+              <li><Link href="/#features" className="text-[#9AA6C4] hover:text-white transition-colors text-sm">Features</Link></li>
+              <li><Link href="/#integrations" className="text-[#9AA6C4] hover:text-white transition-colors text-sm">Integrations</Link></li>
+              <li><Link href="/#pricing" className="text-[#9AA6C4] hover:text-white transition-colors text-sm">Pricing</Link></li>
+              <li><Link href="/#changelog" className="text-[#9AA6C4] hover:text-white transition-colors text-sm">Changelog</Link></li>
             </ul>
           </div>
           <div>
             <h4 className="text-white font-semibold mb-6">Docs</h4>
             <ul className="space-y-4">
-              <li><Link href="#" className="text-[#9AA6C4] hover:text-white transition-colors text-sm">Documentation</Link></li>
-              <li><Link href="#" className="text-[#9AA6C4] hover:text-white transition-colors text-sm">API Reference</Link></li>
-              <li><Link href="#" className="text-[#9AA6C4] hover:text-white transition-colors text-sm">Status</Link></li>
-              <li><Link href="#" className="text-[#9AA6C4] hover:text-white transition-colors text-sm">Support</Link></li>
+              <li><Link href="/#docs" className="text-[#9AA6C4] hover:text-white transition-colors text-sm">Documentation</Link></li>
+              <li><Link href="/#docs" className="text-[#9AA6C4] hover:text-white transition-colors text-sm">API Reference</Link></li>
+              <li><Link href="/#status" className="text-[#9AA6C4] hover:text-white transition-colors text-sm">Status</Link></li>
+              <li><Link href="/#support" className="text-[#9AA6C4] hover:text-white transition-colors text-sm">Support</Link></li>
             </ul>
           </div>
           <div>
             <h4 className="text-white font-semibold mb-6">Company</h4>
             <ul className="space-y-4">
-              <li><Link href="#" className="text-[#9AA6C4] hover:text-white transition-colors text-sm">About</Link></li>
-              <li><Link href="#" className="text-[#9AA6C4] hover:text-white transition-colors text-sm">Blog</Link></li>
-              <li><Link href="#" className="text-[#9AA6C4] hover:text-white transition-colors text-sm">Careers</Link></li>
-              <li><Link href="#" className="text-[#9AA6C4] hover:text-white transition-colors text-sm">Contact</Link></li>
+              <li><Link href="/#about" className="text-[#9AA6C4] hover:text-white transition-colors text-sm">About</Link></li>
+              <li><Link href="/#blog" className="text-[#9AA6C4] hover:text-white transition-colors text-sm">Blog</Link></li>
+              <li><Link href="/#careers" className="text-[#9AA6C4] hover:text-white transition-colors text-sm">Careers</Link></li>
+              <li><Link href="/#contact" className="text-[#9AA6C4] hover:text-white transition-colors text-sm">Contact</Link></li>
             </ul>
           </div>
         </div>

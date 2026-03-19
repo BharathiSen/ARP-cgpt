@@ -2,7 +2,7 @@
 
 import { motion } from 'framer-motion';
 import { ArrowRight, Play } from 'lucide-react';
-import Link from 'next/link';
+import { Button } from '@/components/Button';
 
 export default function CTA() {
   return (
@@ -31,13 +31,13 @@ export default function CTA() {
           </p>
 
           <div className="flex flex-wrap items-center justify-center gap-5">
-            <Link href="/login" className="ds-btn-primary text-base">
+            <Button href="/login" className="text-base px-6 py-3">
               Start Testing Your API
               <ArrowRight className="w-5 h-5" />
-            </Link>
-            <Link href="/dashboard" className="ds-btn-ghost text-base">
+            </Button>
+            <Button variant="ghost" href="/dashboard" className="text-base px-6 py-3">
               Run Your First Simulation
-            </Link>
+            </Button>
           </div>
         </motion.div>
       </div>

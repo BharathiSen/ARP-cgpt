@@ -3,7 +3,7 @@
 import { motion } from 'framer-motion';
 import { Terminal, Copy, Check, Info } from 'lucide-react';
 import { useState } from 'react';
-import Link from 'next/link';
+import { Button } from '@/components/Button';
 
 export default function DocsSection() {
   const [copied, setCopied] = useState(false);
@@ -55,12 +55,12 @@ export default function DocsSection() {
           </div>
 
           <div className="mt-8 flex gap-4">
-            <Link href="/login" className="ds-btn-primary text-sm">
+            <Button href="/login" className="text-sm">
               Get API Key →
-            </Link>
-            <Link href="#" className="ds-btn-ghost text-sm">
+            </Button>
+            <Button variant="ghost" href="/#docs" className="text-sm">
               View Full Docs
-            </Link>
+            </Button>
           </div>
         </div>
 
@@ -101,22 +101,22 @@ export default function DocsSection() {
             <span style={{ color: '#9AA6C4' }}> -X POST </span>
             <span style={{ color: '#fff' }}>https://airlb.ai/api/simulate \{'\n'}</span>
             {'  '}<span style={{ color: '#9AA6C4' }}>-H </span>
-            <span style={{ color: '#4DEBFF' }}>"Authorization: Bearer YOUR_API_KEY"</span>
+            <span style={{ color: '#4DEBFF' }}>&quot;Authorization: Bearer YOUR_API_KEY&quot;</span>
             <span style={{ color: '#9AA6C4' }}> \{'\n'}</span>
             {'  '}<span style={{ color: '#9AA6C4' }}>-d </span>
-            <span style={{ color: '#fff' }}>'{'{'}{'\n'}</span>
-            {'    '}<span style={{ color: '#00C8FF' }}>"endpoint"</span>
+            <span style={{ color: '#fff' }}>&apos;{'{'}{'\n'}</span>
+            {'    '}<span style={{ color: '#00C8FF' }}>&quot;endpoint&quot;</span>
             <span style={{ color: '#9AA6C4' }}>: </span>
-            <span style={{ color: '#4DEBFF' }}>"https://api.yourlab.com/v1/auth"</span>
+            <span style={{ color: '#4DEBFF' }}>&quot;https://api.yourlab.com/v1/auth&quot;</span>
             <span style={{ color: '#9AA6C4' }}>,{'\n'}</span>
-            {'    '}<span style={{ color: '#00C8FF' }}>"failureRate"</span>
+            {'    '}<span style={{ color: '#00C8FF' }}>&quot;failureRate&quot;</span>
             <span style={{ color: '#9AA6C4' }}>: </span>
             <span style={{ color: '#4DEBFF' }}>25</span>
             <span style={{ color: '#9AA6C4' }}>,{'\n'}</span>
-            {'    '}<span style={{ color: '#00C8FF' }}>"latency"</span>
+            {'    '}<span style={{ color: '#00C8FF' }}>&quot;latency&quot;</span>
             <span style={{ color: '#9AA6C4' }}>: </span>
             <span style={{ color: '#4DEBFF' }}>500{'\n'}</span>
-            {'  '}<span style={{ color: '#fff' }}>{'}'}'</span>
+            {'  '}<span style={{ color: '#fff' }}>{'}'}&apos;</span>
           </pre>
         </motion.div>
       </div>

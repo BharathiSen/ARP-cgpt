@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import Link from 'next/link';
+import { Button } from '@/components/Button';
 import HeroVideoBackground from './HeroVideoBackground';
 
 export default function Hero() {
@@ -47,12 +47,12 @@ export default function Hero() {
 
           {/* CTAs */}
           <div className="flex flex-col sm:flex-row items-center gap-5">
-            <Link href="/login" className="ds-btn-primary text-base px-8 py-4">
+            <Button href="/login" className="text-base px-8 py-4">
               Start Testing Free
-            </Link>
-            <Link href="/dashboard" className="ds-btn-ghost text-base px-8 py-4">
+            </Button>
+            <Button variant="ghost" href="/dashboard" className="text-base px-8 py-4">
               View Product Demo
-            </Link>
+            </Button>
           </div>
         </motion.div>
       </div>

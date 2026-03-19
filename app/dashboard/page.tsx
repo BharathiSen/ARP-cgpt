@@ -3,27 +3,44 @@
 import { useState, useEffect } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import Navbar from '@/components/Navbar';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Play, Activity, Database, CheckCircle, XCircle, Info, LogOut, Loader2 } from 'lucide-react';
-import Link from 'next/link';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { Button } from '@/components/Button';
+
+// Add simple interfaces for data models
+interface Simulation {
+  id: string;
+  endpoint: string;
+  status: string;
+  avgLatency: number;
+  insight?: string;
+  createdAt: string;
+}
+
+interface Project {
+  id: string;
+  name: string;
+  simulations?: Simulation[];
+}
 
 export default function Dashboard() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const [projects, setProjects] = useState<any[]>([]);
-  const [selectedProject, setSelectedProject] = useState<any>(null);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [newProjectName, setNewProjectName] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
 
   // Simulation form
   const [endpoint, setEndpoint] = useState('https://api.example.com/v1/users');
   const [isSimulating, setIsSimulating] = useState(false);
-  const [simulationResult, setSimulationResult] = useState<any>(null);
+  const [simulationResult, setSimulationResult] = useState<Simulation | null>(null);
 
   useEffect(() => {
     if (status === 'unauthenticated') { router.push('/login'); }
     else if (status === 'authenticated') { fetchProjects(); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
 
   const fetchProjects = async () => {
@@ -37,13 +54,15 @@ export default function Dashboard() {
 
   const createProject = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newProjectName.trim()) return;
+    if (!newProjectName.trim() || isCreating) return;
+    setIsCreating(true);
     const res = await fetch('/api/projects', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: newProjectName }),
     });
     if (res.ok) { setNewProjectName(''); fetchProjects(); }
+    setIsCreating(false);
   };
 
   const runSimulation = async () => {
@@ -61,13 +80,13 @@ export default function Dashboard() {
     fetchProjects();
   };
 
-  const chartData = selectedProject?.simulations?.map((s: any, idx: number) => ({
+  const chartData = selectedProject?.simulations?.map((s: Simulation, idx: number) => ({
     name: `Run ${idx + 1}`,
     latency: s.avgLatency,
   })) || [];
 
-  const successCount = selectedProject?.simulations?.filter((s:any) => s.status === 'SUCCESS').length || 0;
-  const failureCount = selectedProject?.simulations?.filter((s:any) => s.status === 'FAILED').length || 0;
+  const successCount = selectedProject?.simulations?.filter((s: Simulation) => s.status === 'SUCCESS').length || 0;
+  const failureCount = selectedProject?.simulations?.filter((s: Simulation) => s.status === 'FAILED').length || 0;
 
   const pieData = [
     { name: 'Success', value: successCount },
@@ -83,8 +102,6 @@ export default function Dashboard() {
 
   return (
     <main className="min-h-screen" style={{ background: 'var(--bg-base)' }}>
-      <Navbar />
-
       {/* Background Glow */}
       <div className="pointer-events-none fixed inset-0 -z-10">
         <div className="ds-glow-orb w-[800px] h-[600px] top-[-200px] right-[-200px]" style={{ opacity: 0.15 }} />
@@ -99,12 +116,13 @@ export default function Dashboard() {
               Welcome back, <span style={{ color: '#00C8FF' }}>{session?.user?.name || session?.user?.email}</span>
             </p>
           </div>
-          <button
+          <Button
+            variant="ghost"
             onClick={() => signOut({ callbackUrl: '/' })}
-            className="ds-btn-ghost text-sm px-4 py-2 flex items-center gap-2"
+            className="text-sm px-4 py-2"
           >
             <LogOut className="w-4 h-4" /> Sign Out
-          </button>
+          </Button>
         </div>
 
         <div className="grid grid-cols-12 gap-6">
@@ -123,14 +141,18 @@ export default function Dashboard() {
                   onChange={(e) => setNewProjectName(e.target.value)}
                   placeholder="New project name…"
                   className="ds-input text-sm py-2"
+                  disabled={isCreating}
                   required
                 />
-                <button type="submit"
+                <Button 
+                  type="submit"
+                  variant="custom"
+                  isLoading={isCreating}
                   className="flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-lg transition-all"
                   style={{ background: 'rgba(0,200,255,0.15)', border: '1px solid rgba(0,200,255,0.30)' }}
                 >
-                  <Plus className="w-5 h-5" style={{ color: '#00C8FF' }} />
-                </button>
+                  {!isCreating && <Plus className="w-5 h-5" style={{ color: '#00C8FF' }} />}
+                </Button>
               </form>
 
               {/* Project List */}
@@ -190,16 +212,14 @@ export default function Dashboard() {
                   </div>
 
                   <div className="mt-6 flex gap-4">
-                    <button
+                    <Button
                       onClick={runSimulation}
-                      disabled={isSimulating}
-                      className="ds-btn-primary flex-1 justify-center"
+                      isLoading={isSimulating}
+                      className="flex-1"
                     >
-                      {isSimulating
-                        ? <><Loader2 className="w-4 h-4 animate-spin" /> Running Simulation…</>
-                        : <><Play className="w-4 h-4" /> Run Reliability Test</>
-                      }
-                    </button>
+                      <Play className="w-4 h-4" /> 
+                      {isSimulating ? 'Running Simulation…' : 'Run Reliability Test'}
+                    </Button>
                   </div>
                 </div>
 
@@ -306,7 +326,7 @@ export default function Dashboard() {
                     {(!selectedProject.simulations || selectedProject.simulations.length === 0) && (
                       <p className="p-8 text-center text-sm" style={{ color: '#9AA6C4' }}>No simulations yet. Run your first test above.</p>
                     )}
-                    {selectedProject.simulations?.slice().reverse().map((sim: any) => (
+                    {selectedProject.simulations?.slice().reverse().map((sim: Simulation) => (
                       <div key={sim.id}
                            className="px-6 py-4 flex items-center justify-between hover:bg-white/[0.02] transition-colors">
                         <div className="min-w-0">

@@ -10,7 +10,7 @@ export async function GET() {
   }
 
   const projects = await prisma.project.findMany({
-    where: { userId: (session.user as any).id },
+    where: { userId: (session.user as { id: string }).id },
     include: { simulations: true },
   });
 
@@ -28,7 +28,7 @@ export async function POST(req: Request) {
     data: {
       name,
       description,
-      userId: (session.user as any).id,
+      userId: (session.user as { id: string }).id,
     },
   });
 

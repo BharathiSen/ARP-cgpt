@@ -3,10 +3,10 @@
 import { useState } from 'react';
 import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import Navbar from '@/components/Navbar';
 import { motion } from 'framer-motion';
 import { Activity } from 'lucide-react';
 import Link from 'next/link';
+import { Button } from '@/components/Button';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -54,8 +54,6 @@ export default function LoginPage() {
 
   return (
     <main className="min-h-screen overflow-hidden" style={{ background: 'var(--bg-base)' }}>
-      <Navbar />
-
       {/* Background Glow */}
       <div className="pointer-events-none fixed inset-0 -z-10">
         <div className="ds-glow-orb w-[700px] h-[700px] top-[-200px] left-1/2 -translate-x-1/2" />
@@ -130,13 +128,13 @@ export default function LoginPage() {
                 </div>
               )}
 
-              <button
+              <Button
                 type="submit"
-                disabled={loading}
-                className="ds-btn-primary w-full justify-center mt-2"
+                isLoading={loading}
+                className="w-full mt-2"
               >
-                {loading ? 'Please wait…' : isRegister ? 'Create Account' : 'Sign In to Dashboard'}
-              </button>
+                {isRegister ? 'Create Account' : 'Sign In to Dashboard'}
+              </Button>
             </form>
 
             <div className="mt-6 text-center text-sm" style={{ color: '#9AA6C4' }}>

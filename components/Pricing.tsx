@@ -2,6 +2,7 @@
 
 import { motion } from 'framer-motion';
 import { CheckCircle2, Globe } from 'lucide-react';
+import { Button } from '@/components/Button';
 
 const tiers = [
   {
@@ -74,13 +75,16 @@ export default function Pricing() {
                  {tier.period && <span className="text-[#9AA6C4] text-lg font-medium">{tier.period}</span>}
               </div>
               
-              <button className={`w-full py-4 rounded-xl font-semibold transition-all mb-8 ${
+              <Button 
+                href="/login"
+                variant="custom"
+                className={`w-full py-4 rounded-xl font-semibold transition-all mb-8 ${
                  tier.highlight 
                  ? 'bg-gradient-to-br from-[#00C8FF] to-[#1EA7FF] text-white shadow-lg' 
                  : 'bg-white/5 text-white border border-[#4DEBFF]/40 hover:shadow-[0_0_30px_rgba(0,200,255,0.3)]'
               }`}>
                 {tier.name === 'Free' ? 'Get Started' : 'Subscribe Now'}
-              </button>
+              </Button>
 
               <div className="space-y-4">
                  {tier.features.map(f => (
