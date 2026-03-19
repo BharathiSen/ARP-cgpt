@@ -1,30 +1,31 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { CheckCircle2 } from 'lucide-react';
+import { CheckCircle2, Globe } from 'lucide-react';
 
 const tiers = [
   {
     name: 'Free',
-    price: '$0',
+    price: '₹0',
+    period: '/mo',
     description: 'Perfect for individual developers establishing baselines.',
-    features: ['Basic reliability tests', '100 requests per run', 'Community Discord support', 'Standard dashboard'],
+    features: ['Basic API testing', 'Limited requests (1000 per month)', 'Community support'],
     highlight: false,
   },
   {
     name: 'Developer',
-    price: '$49',
+    price: '₹499',
     period: '/mo',
     description: 'Advanced simulation tools for serious engineering projects.',
-    features: ['Advanced simulation', 'AI insights', '5,000 requests per run', 'Priority email support', 'Latency distribution exports'],
+    features: ['Advanced failure simulation', 'Load testing support', 'AI reliability insights', 'Increased request limits'],
     highlight: true,
   },
   {
     name: 'Team',
-    price: '$199',
+    price: '₹1499',
     period: '/mo',
     description: 'Unlimited capacity and collaboration for engineering teams.',
-    features: ['Unlimited tests', 'Team collaboration', 'Custom alerts & webhooks', 'Dedicated account manager', 'SLA guarantees'],
+    features: ['Unlimited test scenarios', 'Team collaboration', 'Advanced analytics dashboard', 'Priority support'],
     highlight: false,
   }
 ];
@@ -33,6 +34,13 @@ export default function Pricing() {
   return (
     <section id="pricing" className="py-32 bg-background border-t border-white/5 relative">
       <div className="max-w-7xl mx-auto px-6">
+        <div className="flex justify-center mb-8">
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-sm font-medium">
+            <Globe className="w-4 h-4" />
+            Pricing tailored for developers in India
+          </div>
+        </div>
+        
         <div className="text-center mb-20">
           <h2 className="text-4xl md:text-5xl font-bold tracking-tight text-white mb-6">
             Pricing built for scale.
@@ -62,7 +70,7 @@ export default function Pricing() {
               <h3 className="text-2xl font-semibold text-white mb-2">{tier.name}</h3>
               <div className="text-[#9AA6C4] text-sm h-10 mb-6">{tier.description}</div>
               <div className="flex items-baseline gap-1 mb-8">
-                 <span className="text-5xl font-bold text-white tracking-tight">{tier.price}</span>
+                 <span className="text-5xl font-extrabold text-white tracking-tight">{tier.price}</span>
                  {tier.period && <span className="text-[#9AA6C4] text-lg font-medium">{tier.period}</span>}
               </div>
               
@@ -71,7 +79,7 @@ export default function Pricing() {
                  ? 'bg-gradient-to-br from-[#00C8FF] to-[#1EA7FF] text-white shadow-lg' 
                  : 'bg-white/5 text-white border border-[#4DEBFF]/40 hover:shadow-[0_0_30px_rgba(0,200,255,0.3)]'
               }`}>
-                 Get Started
+                {tier.name === 'Free' ? 'Get Started' : 'Subscribe Now'}
               </button>
 
               <div className="space-y-4">

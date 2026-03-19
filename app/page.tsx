@@ -1,9 +1,11 @@
 import Navbar from '@/components/Navbar';
 import Hero from '@/components/Hero';
 import ProblemSection from '@/components/ProblemSection';
-import SolutionSection from '@/components/SolutionSection';
+import HowItWorks from '@/components/HowItWorks';
+import UseCases from '@/components/UseCases';
 import FeatureGrid from '@/components/FeatureGrid';
 import ProductDemo from '@/components/ProductDemo';
+import DocsSection from '@/components/DocsSection';
 import AISection from '@/components/AISection';
 import Pricing from '@/components/Pricing';
 import CTA from '@/components/CTA';
@@ -15,9 +17,11 @@ export default function Home() {
       <Navbar />
       <Hero />
       <ProblemSection />
-      <SolutionSection />
+      <HowItWorks />
       <FeatureGrid />
+      <UseCases />
       <ProductDemo />
+      <DocsSection />
       <AISection />
       <Pricing />
       <CTA />

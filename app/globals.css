@@ -3,40 +3,68 @@
 @tailwind utilities;
 
 :root {
-  --foreground-rgb: 255, 255, 255;
-  --background-start-rgb: 11, 16, 32;
-  --background-end-rgb: 5, 7, 15;
+  --background: #05070f;
+  --secondary-bg: #020617;
+  --primary-neon: #00C8FF;
+  --secondary-cyan: #4DEBFF;
+  --accent-glow: rgba(0, 200, 255, 0.4);
+  --muted-text: #9AA6C4;
+  --card-bg: rgba(8, 18, 35, 0.7);
+  --card-border: rgba(0, 200, 255, 0.15);
+  --card-shadow: 0 0 40px rgba(0, 200, 255, 0.15);
 }
 
-body {
-  color: rgb(var(--foreground-rgb));
-  background: radial-gradient(circle at center, #020c1b 0%, #020617 70%);
-  background-attachment: fixed;
-  min-height: 100vh;
+@layer base {
+  body {
+    @apply bg-[#05070f] text-white selection:bg-[#00C8FF] selection:text-white;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
 }
 
-/* Custom scrollbar */
-::-webkit-scrollbar {
-  width: 10px;
+@layer components {
+  .section-gradient {
+    background: radial-gradient(circle at top, #0b1020, #05070f);
+  }
+
+  .glass-card {
+    @apply bg-[#081223]/70 border border-[#00C8FF]/15 backdrop-blur-xl rounded-[20px] shadow-[0_0_40px_rgba(0,200,255,0.15)];
+  }
+
+  .btn-primary {
+    @apply bg-gradient-to-br from-[#00C8FF] to-[#1EA7FF] text-white font-bold px-8 py-4 rounded-xl transition-all hover:scale-[1.02] hover:shadow-[0_0_30px_rgba(0,200,255,0.4)] active:scale-[0.98];
+  }
+
+  .btn-secondary {
+    @apply bg-white/5 border border-white/10 text-white/70 font-bold px-8 py-4 rounded-xl transition-all hover:bg-white/10 hover:text-white;
+  }
+
+  .input-theme {
+    @apply bg-[#081223]/60 border border-[#00C8FF]/20 rounded-xl px-4 py-3 text-white focus:border-[#00C8FF] focus:outline-none transition-all placeholder:text-[#9AA6C4]/30;
+  }
+
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-[#00C8FF] to-[#4DEBFF];
+  }
+  
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
 }
 
-::-webkit-scrollbar-track {
-  background: #020617;
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
 }
-
-::-webkit-scrollbar-thumb {
-  background: #334155;
-  border-radius: 5px;
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
 }
-
-::-webkit-scrollbar-thumb:hover {
-  background: #475569;
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(0, 200, 255, 0.2);
+  border-radius: 10px;
 }
-
-/* Custom selection */
-::selection {
-  background: #00C8FF;
-  color: white;
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 200, 255, 0.4);
 }
-
-
