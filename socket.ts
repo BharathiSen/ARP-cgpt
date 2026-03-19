@@ -12,6 +12,51 @@ const server = createServer((_req, res) => {
 
 const wss = new WebSocketServer({ server });
 
+async function executeRealWS(projectId: string, endpoint: string) {
+  const startTime = Date.now();
+  let isFailed = false;
+  let actualLatency = 0;
+  let statusCode = 0;
+
+  try {
+    const response = await fetch(endpoint, {
+      method: 'GET',
+      signal: AbortSignal.timeout ? AbortSignal.timeout(10000) : undefined
+    });
+    
+    actualLatency = Date.now() - startTime;
+    statusCode = response.status;
+    isFailed = !response.ok;
+  } catch (err: any) {
+    actualLatency = Date.now() - startTime;
+    isFailed = true;
+    statusCode = (err.name === 'TimeoutError' || err.name === 'AbortError') ? 408 : 500;
+  }
+
+  const status = isFailed ? 'FAILED' : 'SUCCESS';
+
+  let insight = '';
+  if (isFailed) {
+    if (statusCode === 408) {
+      insight = `Endpoint timed out (>${actualLatency}ms). Suggest increasing API timeouts or vertically scaling.`;
+    } else {
+      insight = `Endpoint returned HTTP ${statusCode}. Suggest implementing retry with exponential backoff.`;
+    }
+  } else {
+    if (actualLatency > 800) {
+      insight = `Endpoint is slow (latency: ${actualLatency}ms). Consider caching or DB optimization.`;
+    } else {
+      insight = `Endpoint performed securely with ${actualLatency}ms latency and status ${statusCode}.`;
+    }
+  }
+
+  const simulation = await prisma.simulation.create({
+    data: { projectId, endpoint, failureRate: isFailed ? 100 : 0, latency: Math.round(actualLatency), status, avgLatency: actualLatency, insight },
+  });
+
+  return simulation;
+}
+
 wss.on("connection", (socket) => {
   socket.send(JSON.stringify({ type: "connected", timestamp: Date.now() }));
 
@@ -20,41 +65,14 @@ wss.on("connection", (socket) => {
       const parsed = JSON.parse(data.toString());
 
       if (parsed.type === "simulate") {
-        const { projectId, endpoint, failureRate = 0, latency = 0 } = parsed.payload || {};
+        const { projectId, endpoint } = parsed.payload || {};
 
         if (!projectId || !endpoint) {
           socket.send(JSON.stringify({ type: "error", message: "Missing projectId or endpoint" }));
           return;
         }
 
-        const random = Math.random() * 100;
-        const isFailed = random < failureRate;
-        const status = isFailed ? 'FAILED' : 'SUCCESS';
-        
-        const actualLatency = isFailed 
-          ? (Number(latency) + Math.random() * 500) 
-          : (Number(latency) + Math.random() * 50);
-
-        let insight = '';
-        if (isFailed) {
-          insight = `Endpoint failed under ${failureRate}% error injection. Check if ${endpoint} handles graceful degradation.`;
-        } else if (actualLatency > 500) {
-          insight = `Endpoint is slow (avg. ${actualLatency.toFixed(0)}ms). Consider optimization or better scaling.`;
-        } else {
-          insight = `Endpoint performed well under simulation. System is resilient to current failure rates.`;
-        }
-
-        const simulation = await prisma.simulation.create({
-          data: {
-            projectId,
-            endpoint,
-            failureRate: parseFloat(failureRate.toString()),
-            latency: parseInt(latency.toString(), 10),
-            status,
-            avgLatency: actualLatency,
-            insight,
-          },
-        });
+        const simulation = await executeRealWS(projectId, endpoint);
 
         socket.send(JSON.stringify({
           type: "simulation_result",

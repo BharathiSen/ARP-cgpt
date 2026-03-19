@@ -7,6 +7,7 @@ import Navbar from '@/components/Navbar';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Play, Activity, Database, CheckCircle, XCircle, Info, LogOut, Loader2 } from 'lucide-react';
 import Link from 'next/link';
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 export default function Dashboard() {
   const { data: session, status } = useSession();
@@ -17,8 +18,6 @@ export default function Dashboard() {
 
   // Simulation form
   const [endpoint, setEndpoint] = useState('https://api.example.com/v1/users');
-  const [failureRate, setFailureRate] = useState(5);
-  const [latency, setLatency] = useState(100);
   const [isSimulating, setIsSimulating] = useState(false);
   const [simulationResult, setSimulationResult] = useState<any>(null);
 
@@ -54,13 +53,27 @@ export default function Dashboard() {
     const res = await fetch('/api/simulate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ projectId: selectedProject.id, endpoint, failureRate, latency }),
+      body: JSON.stringify({ projectId: selectedProject.id, endpoint }),
     });
     const data = await res.json();
     setSimulationResult(data);
     setIsSimulating(false);
     fetchProjects();
   };
+
+  const chartData = selectedProject?.simulations?.map((s: any, idx: number) => ({
+    name: `Run ${idx + 1}`,
+    latency: s.avgLatency,
+  })) || [];
+
+  const successCount = selectedProject?.simulations?.filter((s:any) => s.status === 'SUCCESS').length || 0;
+  const failureCount = selectedProject?.simulations?.filter((s:any) => s.status === 'FAILED').length || 0;
+
+  const pieData = [
+    { name: 'Success', value: successCount },
+    { name: 'Failure', value: failureCount }
+  ];
+  const COLORS = ['#00C8FF', '#ff4d4d'];
 
   if (status === 'loading') return (
     <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--bg-base)' }}>
@@ -164,8 +177,8 @@ export default function Dashboard() {
                     </h2>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    <div className="md:col-span-2">
+                  <div className="flex flex-col gap-5">
+                    <div>
                       <label className="ds-label">Target Endpoint URL</label>
                       <input
                         value={endpoint}
@@ -174,27 +187,9 @@ export default function Dashboard() {
                         placeholder="https://api.yourservice.com/endpoint"
                       />
                     </div>
-                    <div>
-                      <label className="ds-label">Failure Injection Rate (%)</label>
-                      <input
-                        type="number" min={0} max={100}
-                        value={failureRate}
-                        onChange={(e) => setFailureRate(parseInt(e.target.value))}
-                        className="ds-input"
-                      />
-                    </div>
-                    <div>
-                      <label className="ds-label">Simulated Latency (ms)</label>
-                      <input
-                        type="number" min={0}
-                        value={latency}
-                        onChange={(e) => setLatency(parseInt(e.target.value))}
-                        className="ds-input"
-                      />
-                    </div>
                   </div>
 
-                  <div className="mt-8 flex gap-4">
+                  <div className="mt-6 flex gap-4">
                     <button
                       onClick={runSimulation}
                       disabled={isSimulating}
@@ -248,6 +243,58 @@ export default function Dashboard() {
                     </motion.div>
                   )}
                 </AnimatePresence>
+
+                {/* ── Data Visualization ── */}
+                {selectedProject?.simulations && selectedProject.simulations.length > 0 && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div className="ds-card p-6">
+                      <h3 className="font-bold text-white text-sm uppercase tracking-widest mb-4">Latency Trend</h3>
+                      <div className="h-48">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart data={chartData}>
+                            <XAxis dataKey="name" stroke="#9AA6C4" fontSize={10} tickLine={false} axisLine={false} />
+                            <YAxis stroke="#9AA6C4" fontSize={10} tickLine={false} axisLine={false} />
+                            <Tooltip
+                              contentStyle={{ background: '#0F172A', border: '1px solid #1E293B', borderRadius: '8px' }}
+                              itemStyle={{ color: '#00C8FF' }}
+                            />
+                            <Line type="monotone" dataKey="latency" stroke="#00C8FF" strokeWidth={2} dot={{ r: 3, fill: '#0F172A', stroke: '#00C8FF', strokeWidth: 2 }} />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                    <div className="ds-card p-6">
+                      <h3 className="font-bold text-white text-sm uppercase tracking-widest mb-4">Reliability Split</h3>
+                      <div className="h-48">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={pieData}
+                              cx="50%"
+                              cy="50%"
+                              innerRadius={50}
+                              outerRadius={70}
+                              paddingAngle={5}
+                              dataKey="value"
+                            >
+                              {pieData.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                              ))}
+                            </Pie>
+                            <Tooltip
+                              contentStyle={{ background: '#0F172A', border: '1px solid #1E293B', borderRadius: '8px' }}
+                              itemStyle={{ color: '#fff' }}
+                            />
+                          </PieChart>
+                        </ResponsiveContainer>
+                        <div className="flex justify-center gap-4 mt-2">
+                          <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full" style={{ background: '#00C8FF' }}></div><span className="text-xs text-slate-300">Success ({successCount})</span></div>
+                          <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full" style={{ background: '#ff4d4d' }}></div><span className="text-xs text-slate-300">Failed ({failureCount})</span></div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* ── Simulation History ── */}
                 <div className="ds-card overflow-hidden">
