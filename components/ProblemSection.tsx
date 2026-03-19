@@ -6,8 +6,8 @@ import ReliabilityTestScenario from './ReliabilityTestScenario';
 
 export default function ProblemSection() {
   return (
-    <section className="relative py-32 bg-background border-t border-white/5 overflow-hidden">
-      <div className="absolute inset-0 bg-gradient-to-b from-background via-violet-950/10 to-background opacity-50 block z-0"></div>
+    <section className="ds-section relative overflow-hidden">
+
 
       <div className="relative z-10 max-w-7xl mx-auto px-6 grid grid-cols-1 md:grid-cols-2 gap-16 items-center">
         <motion.div

@@ -6,7 +6,6 @@ import UseCases from '@/components/UseCases';
 import FeatureGrid from '@/components/FeatureGrid';
 import ProductDemo from '@/components/ProductDemo';
 import DocsSection from '@/components/DocsSection';
-import AISection from '@/components/AISection';
 import Pricing from '@/components/Pricing';
 import CTA from '@/components/CTA';
 import Footer from '@/components/Footer';
@@ -22,7 +21,6 @@ export default function Home() {
       <UseCases />
       <ProductDemo />
       <DocsSection />
-      <AISection />
       <Pricing />
       <CTA />
       <Footer />

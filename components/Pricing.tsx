@@ -32,10 +32,10 @@ const tiers = [
 
 export default function Pricing() {
   return (
-    <section id="pricing" className="py-32 bg-background border-t border-white/5 relative">
+    <section id="pricing" className="ds-section relative">
       <div className="max-w-7xl mx-auto px-6">
         <div className="flex justify-center mb-8">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-sm font-medium">
+          <div className="ds-badge">
             <Globe className="w-4 h-4" />
             Pricing tailored for developers in India
           </div>

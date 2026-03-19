@@ -5,7 +5,7 @@ import { BrainCircuit, Fingerprint } from 'lucide-react';
 
 export default function AISection() {
   return (
-    <section className="relative py-32 bg-background border-t border-white/5 overflow-hidden">
+    <section className="ds-section relative overflow-hidden">
       <div className="relative z-10 max-w-7xl mx-auto px-6 h-full flex flex-col justify-center items-center pointer-events-none">
         <motion.div
            initial={{ opacity: 0, scale: 0.9 }}

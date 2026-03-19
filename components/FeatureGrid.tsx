@@ -5,7 +5,7 @@ import { features } from '../data/features';
 
 export default function FeatureGrid() {
   return (
-     <section id="features" className="py-32 relative border-t border-white/5 bg-gradient-to-b from-[#020617] to-[#020c1b]">
+     <section id="features" className="ds-section">
          <div className="max-w-7xl mx-auto px-6">
            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {features.map((feature, i) => (

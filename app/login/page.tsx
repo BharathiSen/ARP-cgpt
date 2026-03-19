@@ -5,7 +5,8 @@ import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Navbar from '@/components/Navbar';
 import { motion } from 'framer-motion';
-import { Mail, Lock, User, ShieldCheck } from 'lucide-react';
+import { Activity } from 'lucide-react';
+import Link from 'next/link';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -13,11 +14,13 @@ export default function LoginPage() {
   const [name, setName] = useState('');
   const [isRegister, setIsRegister] = useState(false);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setLoading(true);
 
     if (isRegister) {
       const res = await fetch('/api/auth/register', {
@@ -29,6 +32,7 @@ export default function LoginPage() {
       if (!res.ok) {
         const data = await res.json();
         setError(data.error || 'Registration failed');
+        setLoading(false);
         return;
       }
     }
@@ -39,97 +43,121 @@ export default function LoginPage() {
       redirect: false,
     });
 
+    setLoading(false);
+
     if (signInRes?.error) {
-      setError('Invalid credentials');
+      setError('Invalid credentials. Please try again.');
     } else {
       router.push('/dashboard');
     }
   };
 
   return (
-    <main className="min-h-screen bg-[#05070f] text-white selection:bg-[#00C8FF] selection:text-white section-gradient flex flex-col items-center justify-center p-6 lg:p-12">
+    <main className="min-h-screen overflow-hidden" style={{ background: 'var(--bg-base)' }}>
       <Navbar />
-      
-      <div className="w-full max-w-xl">
-        <motion.div 
-          initial={{ opacity: 0, y: 30 }}
+
+      {/* Background Glow */}
+      <div className="pointer-events-none fixed inset-0 -z-10">
+        <div className="ds-glow-orb w-[700px] h-[700px] top-[-200px] left-1/2 -translate-x-1/2" />
+      </div>
+
+      <div className="pt-32 pb-20 flex items-center justify-center px-6">
+        <motion.div
+          initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
-          className="glass-card p-12 lg:p-16 border-[#00C8FF]/20 shadow-[0_0_50px_rgba(0,180,255,0.1)]"
+          transition={{ duration: 0.6, ease: 'easeOut' }}
+          className="w-full max-w-md"
         >
-          <div className="text-center mb-12">
-             <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-[#00C8FF]/10 border border-[#00C8FF]/20 mb-8">
-                <ShieldCheck className="w-10 h-10 text-[#00C8FF]" />
-             </div>
-             <h1 className="text-4xl font-bold tracking-tight text-white mb-4">
-               {isRegister ? 'Join the Lab' : 'Authentication Portal'}
-             </h1>
-             <p className="text-[#9AA6C4] text-lg font-medium leading-relaxed">
-               {isRegister ? 'Start building 100.0% reliable APIs' : 'Access your reliability control center'}
-             </p>
+          {/* Logo */}
+          <div className="flex items-center justify-center gap-2 mb-10">
+            <div className="p-2.5 rounded-xl" style={{ background: 'rgba(0,200,255,0.12)' }}>
+              <Activity className="w-6 h-6" style={{ color: '#00C8FF' }} />
+            </div>
+            <span className="font-bold text-lg ds-gradient-text">AI Reliability Lab</span>
           </div>
-          
-          <form onSubmit={handleSubmit} className="space-y-8">
-            {isRegister && (
-              <div className="relative">
-                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[#9AA6C4]/40">
-                  <User className="w-5 h-5" />
+
+          <div className="ds-card p-10">
+            <h1 className="text-2xl font-bold text-white text-center mb-2">
+              {isRegister ? 'Create your account' : 'Welcome back'}
+            </h1>
+            <p className="text-center text-sm mb-8" style={{ color: '#9AA6C4' }}>
+              {isRegister ? 'Start testing API reliability for free.' : 'Sign in to your developer dashboard.'}
+            </p>
+
+            <form onSubmit={handleSubmit} className="space-y-5">
+              {isRegister && (
+                <div>
+                  <label className="ds-label">Full Name</label>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className="ds-input"
+                    placeholder="John Doe"
+                    required
+                  />
                 </div>
-                <input 
-                  type="text" 
-                  value={name} 
-                  onChange={(e) => setName(e.target.value)}
-                  className="input-theme w-full pl-12 h-14"
-                  placeholder="Your Full Name"
+              )}
+
+              <div>
+                <label className="ds-label">Email Address</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="ds-input"
+                  placeholder="you@company.com"
                   required
                 />
               </div>
-            )}
-            <div className="relative">
-               <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[#9AA6C4]/40">
-                  <Mail className="w-5 h-5" />
-               </div>
-               <input 
-                type="email" 
-                value={email} 
-                onChange={(e) => setEmail(e.target.value)}
-                className="input-theme w-full pl-12 h-14"
-                placeholder="developer@work.com"
-                required
-              />
-            </div>
-            <div className="relative">
-               <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[#9AA6C4]/40">
-                  <Lock className="w-5 h-5" />
-               </div>
-               <input 
-                type="password" 
-                value={password} 
-                onChange={(e) => setPassword(e.target.value)}
-                className="input-theme w-full pl-12 h-14"
-                placeholder="••••••••••••"
-                required
-              />
-            </div>
-            
-            {error && <p className="text-red-400 font-bold text-center text-sm">{error}</p>}
-            
-            <button 
-              type="submit"
-              className="btn-primary w-full h-16 text-lg tracking-wide uppercase font-bold"
-            >
-              {isRegister ? 'Create Account' : 'Authenticate Console'}
-            </button>
-            <p className="text-center text-sm font-bold text-[#9AA6C4]/40 tracking-widest pt-4">
-              {isRegister ? 'ALREADY A MEMBER?' : "NEED ACCESS?"}{' '}
-              <button 
-                type="button"
-                onClick={() => setIsRegister(!isRegister)}
-                className="text-[#00C8FF] hover:text-[#4DEBFF] hover:underline underline-offset-8 transition-colors"
+
+              <div>
+                <label className="ds-label">Password</label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="ds-input"
+                  placeholder="••••••••••"
+                  required
+                />
+              </div>
+
+              {error && (
+                <div className="text-sm text-center rounded-lg py-2.5 px-4"
+                     style={{ background: 'rgba(255,50,50,0.10)', border: '1px solid rgba(255,50,50,0.25)', color: '#ff7070' }}>
+                  {error}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="ds-btn-primary w-full justify-center mt-2"
               >
-                {isRegister ? 'SIGN IN' : 'REGISTER NOW'}
+                {loading ? 'Please wait…' : isRegister ? 'Create Account' : 'Sign In to Dashboard'}
               </button>
-            </p>
-          </form>
+            </form>
+
+            <div className="mt-6 text-center text-sm" style={{ color: '#9AA6C4' }}>
+              {isRegister ? 'Already have an account?' : "Don't have an account?"}{' '}
+              <button
+                type="button"
+                onClick={() => { setIsRegister(!isRegister); setError(''); }}
+                className="font-semibold transition-colors hover:opacity-80"
+                style={{ color: '#00C8FF' }}
+              >
+                {isRegister ? 'Sign In' : 'Register'}
+              </button>
+            </div>
+          </div>
+
+          <p className="text-center text-xs mt-6" style={{ color: '#9AA6C4' }}>
+            By continuing, you agree to our{' '}
+            <Link href="#" className="hover:text-white transition-colors" style={{ color: '#00C8FF' }}>Terms</Link>
+            {' '}and{' '}
+            <Link href="#" className="hover:text-white transition-colors" style={{ color: '#00C8FF' }}>Privacy Policy</Link>.
+          </p>
         </motion.div>
       </div>
     </main>
