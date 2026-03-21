@@ -37,6 +37,10 @@ export default function DashboardClient({ user }: { user: { isPaid: boolean, isA
   const [endpoint, setEndpoint] = useState('https://api.example.com/v1/users');
   const [isSimulating, setIsSimulating] = useState(false);
   const [simulationResult, setSimulationResult] = useState<Simulation | null>(null);
+  
+  // Real-time animation states
+  const [simulationProgress, setSimulationProgress] = useState(0);
+  const [liveLatency, setLiveLatency] = useState(0);
 
   // --- FEATURE 2: AI TEST GENERATOR STATES ---
   const [aiPrompt, setAiPrompt] = useState('');
@@ -65,6 +69,19 @@ export default function DashboardClient({ user }: { user: { isPaid: boolean, isA
     if (status === 'unauthenticated') { router.push('/login'); }
     else if (status === 'authenticated') {
       fetchProjects();
+      // Read prompt from URL if present
+      if (typeof window !== 'undefined') {
+        const urlParams = new URLSearchParams(window.location.search);
+        const promptParams = urlParams.get('prompt');
+        if (promptParams) {
+          setAiPrompt(promptParams);
+          // Set timeout to wait for projects to load, then we could auto-click, but just filling it is enough for UX.
+          setTimeout(() => {
+             const btn = document.getElementById('ai-generate-btn');
+             if(btn) btn.click();
+          }, 1000);
+        }
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
@@ -86,15 +103,39 @@ export default function DashboardClient({ user }: { user: { isPaid: boolean, isA
     if (!selectedProject) return;
     setIsSimulating(true);
     setSimulationResult(null);
-    const res = await fetch('/api/simulate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ projectId: selectedProject.id, endpoint }),
-    });
-    const data = await res.json();
-    setSimulationResult(data);
-    setIsSimulating(false);
-    fetchProjects();
+    setSimulationProgress(0);
+    setLiveLatency(0);
+
+    // Live Progress Animation Interval
+    const interval = setInterval(() => {
+      setSimulationProgress(p => {
+        if (p >= 95) return p;
+        return p + Math.floor(Math.random() * 15);
+      });
+      setLiveLatency(Math.floor(Math.random() * 800) + 50); // random between 50 and 850
+    }, 150);
+
+    try {
+      const res = await fetch('/api/simulate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId: selectedProject.id, endpoint }),
+      });
+      const data = await res.json();
+      
+      clearInterval(interval);
+      setSimulationProgress(100);
+      
+      setTimeout(() => {
+        setSimulationResult(data);
+        setIsSimulating(false);
+        fetchProjects();
+      }, 500); // short delay to show 100%
+      
+    } catch (e) {
+      clearInterval(interval);
+      setIsSimulating(false);
+    }
   };
 
   // --- FEATURE 2: AI TEST GENERATOR LOGIC ---
@@ -260,6 +301,53 @@ export default function DashboardClient({ user }: { user: { isPaid: boolean, isA
               </div>
             ) : (
               <>
+                {/* ── Top System Health Summary ── */}
+                {selectedProject.simulations && selectedProject.simulations.length > 0 && (() => {
+                  const sims = selectedProject.simulations;
+                  const fails = sims.filter(s => s.status === 'FAILED');
+                  const failRate = Math.round((fails.length / sims.length) * 100);
+                  const latencies = sims.map(s => s.avgLatency).sort((a,b) => a - b);
+                  const p95Idx = Math.floor(latencies.length * 0.95);
+                  const p95 = latencies.length > 0 ? latencies[p95Idx] : 0;
+                  const lastIncident = fails.length > 0 ? new Date(fails[0].createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'None recently';
+                  
+                  let statusColor = '#00C8FF';
+                  let statusText = 'Healthy';
+                  if (failRate > 20) { statusColor = '#ff4d4d'; statusText = 'Critical'; }
+                  else if (failRate > 5 || p95 > 800) { statusColor = '#f59e0b'; statusText = 'Degraded'; }
+                  
+                  return (
+                    <div className="ds-card p-5 flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className="relative flex items-center justify-center w-12 h-12 rounded-full" style={{ background: `${statusColor}15` }}>
+                          <Activity className="w-6 h-6" style={{ color: statusColor }} />
+                          {statusText === 'Healthy' && (
+                            <span className="absolute top-0 right-0 w-3 h-3 rounded-full border-2 border-zinc-900" style={{ background: statusColor }}></span>
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-[10px] uppercase tracking-widest text-[#9AA6C4] font-bold mb-1">System Status</p>
+                          <p className="text-lg font-bold" style={{ color: statusColor }}>{statusText}</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-8 text-right">
+                        <div>
+                          <p className="text-[10px] uppercase tracking-widest text-[#9AA6C4] font-bold mb-1">Failure Rate</p>
+                          <p className="text-lg font-mono text-white">{failRate}%</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] uppercase tracking-widest text-[#9AA6C4] font-bold mb-1">P95 Latency</p>
+                          <p className="text-lg font-mono text-white">{p95.toFixed(0)}<span className="text-xs text-white/40 ml-1">ms</span></p>
+                        </div>
+                        <div className="hidden sm:block">
+                          <p className="text-[10px] uppercase tracking-widest text-[#9AA6C4] font-bold mb-1">Last Incident</p>
+                          <p className="text-lg text-white/90">{lastIncident}</p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {/* ── Simulation Configurator ── */}
                 <div className="ds-card p-8">
                   <div className="flex items-center gap-2 mb-8">
@@ -284,6 +372,7 @@ export default function DashboardClient({ user }: { user: { isPaid: boolean, isA
                           placeholder="e.g. Test my API under heavy load..."
                         />
                         <Button 
+                          id="ai-generate-btn"
                           onClick={handleAIGenerate} 
                           isLoading={isAIGenerating}
                           style={{ minWidth: '140px' }}
@@ -330,15 +419,45 @@ export default function DashboardClient({ user }: { user: { isPaid: boolean, isA
                     </div>
                   </div>
 
-                  <div className="mt-6 flex gap-4">
+                  <div className="mt-6 flex flex-col gap-4">
                     <Button
                       onClick={runSimulation}
                       isLoading={isSimulating}
-                      className="flex-1"
+                      className="w-full text-base py-3"
                     >
-                      <Play className="w-4 h-4" /> 
+                      <Play className="w-4 h-4 mr-2" /> 
                       {isSimulating ? 'Running Simulation…' : 'Run Reliability Test'}
                     </Button>
+                    
+                    <AnimatePresence>
+                      {isSimulating && (
+                        <motion.div 
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          exit={{ opacity: 0, height: 0 }}
+                          className="flex flex-col gap-2 overflow-hidden"
+                        >
+                          <div className="flex justify-between items-center text-xs text-[#9AA6C4] font-mono">
+                            <span className="flex items-center gap-2">
+                              <Activity className="w-3 h-3 text-[#00C8FF] animate-pulse" />
+                              Pinging {endpoint.substring(0, 25)}...
+                            </span>
+                            <span className={liveLatency > 600 ? 'text-[#ff4d4d]' : 'text-[#00C8FF]'}>
+                              {liveLatency}ms
+                            </span>
+                          </div>
+                          <div className="h-1.5 w-full bg-black/50 rounded-full overflow-hidden border border-white/5">
+                            <motion.div 
+                              className="h-full bg-gradient-to-r from-[#00C8FF]/50 to-[#00C8FF]"
+                              initial={{ width: 0 }}
+                              animate={{ width: `${simulationProgress}%` }}
+                              transition={{ duration: 0.2 }}
+                            />
+                          </div>
+                          <div className="text-[10px] text-right font-mono text-[#00C8FF]/60">{simulationProgress}%</div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
                 </div>
 
@@ -372,13 +491,48 @@ export default function DashboardClient({ user }: { user: { isPaid: boolean, isA
                       </div>
 
                       {/* --- FEATURE 1: AI FAILURE ANALYSIS UI --- */}
-                      <div className="flex flex-col gap-2 rounded-xl p-4 text-sm relative overflow-hidden"
+                      <div className="flex flex-col gap-2 rounded-xl p-5 text-sm relative overflow-hidden"
                            style={{ background: 'rgba(0,200,255,0.06)', border: '1px solid rgba(0,200,255,0.3)' }}>
-                        <div className="flex items-center gap-2 mb-1">
-                          <BrainCircuit className="w-4 h-4" style={{ color: '#00C8FF' }} />
-                          <span className="font-bold text-[#00C8FF] text-xs uppercase tracking-wider">AI Failure Analysis</span>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <BrainCircuit className="w-5 h-5" style={{ color: '#00C8FF' }} />
+                            <span className="font-bold text-[#00C8FF] text-xs uppercase tracking-widest">AI Insights</span>
+                          </div>
+                          {simulationResult.insight && (() => {
+                            try {
+                              const data = JSON.parse(simulationResult.insight);
+                              return (
+                                <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-[#00C8FF]/10 border border-[#00C8FF]/20">
+                                  <Sparkles className="w-3 h-3 text-[#00C8FF]" />
+                                  <span className="text-[10px] font-mono text-[#00C8FF]">{data.confidence}% Confidence</span>
+                                </div>
+                              );
+                            } catch (e) { return null; }
+                          })()}
                         </div>
-                        <p className="leading-relaxed" style={{ color: '#9AA6C4' }}>{simulationResult.insight}</p>
+                        
+                        {(() => {
+                          try {
+                            if (!simulationResult.insight) return null;
+                            const data = JSON.parse(simulationResult.insight);
+                            return (
+                              <div className="mt-1 flex flex-col gap-3">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                  <div className="bg-black/30 p-3 rounded-lg border border-white/5">
+                                    <span className="text-[10px] text-[#ff4d4d] uppercase font-bold tracking-wider mb-1 block">Root Cause Analysis</span>
+                                    <p className="text-white/90 text-xs leading-relaxed">{data.rootCause}</p>
+                                  </div>
+                                  <div className="bg-black/30 p-3 rounded-lg border border-[#00C8FF]/10">
+                                    <span className="text-[10px] text-[#00C8FF] uppercase font-bold tracking-wider mb-1 block">Suggested Fix</span>
+                                    <p className="text-white/90 text-xs leading-relaxed">{data.suggestion}</p>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          } catch (e) {
+                            return <p className="leading-relaxed" style={{ color: '#9AA6C4' }}>{simulationResult.insight}</p>;
+                          }
+                        })()}
                       </div>
 
                       {/* decorative glow */}

@@ -1,6 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
+import { useRouter } from 'next/navigation';
 import { Code2, Server, Globe, ShieldCheck, Cpu, Terminal } from 'lucide-react';
 
 const cases = [
@@ -13,8 +14,15 @@ const cases = [
 ];
 
 export default function UseCases() {
+  const router = useRouter();
+
+  const handleCardClick = (title: string) => {
+    const scenario = encodeURIComponent(`Test my ${title} architecture under heavy load`);
+    router.push(`/dashboard?prompt=${scenario}`);
+  };
+
   return (
-    <section className="ds-section">
+    <section className="ds-section" id="use-cases">
       <div className="max-w-7xl mx-auto mb-12">
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
           <div className="max-w-xl">
@@ -49,11 +57,12 @@ export default function UseCases() {
           return (
             <motion.div
               key={idx}
+              onClick={() => handleCardClick(c.title)}
               initial={{ opacity: 0, scale: 0.92 }}
               whileInView={{ opacity: 1, scale: 1 }}
               transition={{ delay: idx * 0.07 }}
               viewport={{ once: true }}
-              className="ds-card flex-shrink-0 snap-center p-7 group relative overflow-hidden"
+              className="ds-card flex-shrink-0 snap-center p-7 group relative overflow-hidden cursor-pointer hover:border-[#00C8FF]/50 transition-all hover:-translate-y-1"
               style={{ width: 300 }}
             >
               <div className="mb-5 p-3.5 rounded-xl w-fit transition-all duration-300"

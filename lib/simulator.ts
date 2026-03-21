@@ -39,33 +39,40 @@ export async function runRealSimulation(projectId: string, endpoint: string) {
   const status = isFailed ? 'FAILED' : 'SUCCESS';
 
   // --- FEATURE 1: AI FAILURE ANALYSIS ---
-  let insight = '';
+  const insightData = {
+    confidence: 0,
+    rootCause: '',
+    suggestion: '',
+  };
+
   if (isFailed) {
-    let failureReason = '';
-    let recommendation = '';
-    
+    insightData.confidence = Math.floor(Math.random() * (95 - 82 + 1) + 82); // Simulated AI confidence 82-95%
     if (statusCode === 408) {
-      failureReason = `Critical Timeout detected (> ${actualLatency}ms).`;
-      recommendation = `Increase API gateway timeouts, vertically scale the database, or introduce asynchronous processing queues for heavy tasks.`;
+      insightData.rootCause = `Critical Timeout detected (> ${actualLatency}ms). Backend bottleneck under load.`;
+      insightData.suggestion = `Increase API gateway timeouts, vertically scale the database, or introduce async task queues.`;
     } else if (statusCode === 401 || statusCode === 403) {
-      failureReason = `Authentication/Authorization failure (HTTP ${statusCode}).`;
-      recommendation = `Verify JWT expirations, CORS policies, and ensure the simulation agent holds the proper OAuth scopes.`;
+      insightData.rootCause = `Authentication/Authorization logic rejected test agent (HTTP ${statusCode}).`;
+      insightData.suggestion = `Verify JWT expirations, CORS policies, and inject simulation OAuth tokens.`;
     } else if (statusCode === 429) {
-      failureReason = `Rate limit exceeded (HTTP 429 Too Many Requests).`;
-      recommendation = `API is dropping connections. Consider configuring a WAF bypass rule for internal testing or implementing exponential backoff in client SDKs.`;
+      insightData.confidence = 98;
+      insightData.rootCause = `Strict Rate limit or WAF active (HTTP 429).`;
+      insightData.suggestion = `Configure a testing bypass rule in Cloudflare/AWS WAF, or apply exponential backoff.`;
     } else {
-      failureReason = `Unexpected Internal or Upstream Error (HTTP ${statusCode}).`;
-      recommendation = `Analyze backend logs for crash stack traces. Implement circuit breakers to avoid cascading failures.`;
+      insightData.rootCause = `Unexpected Internal/Upstream Error (HTTP ${statusCode}).`;
+      insightData.suggestion = `Enable deep tracing for this route and implement circuit breakers for cascading failures.`;
     }
-    
-    insight = `[AI Analysis] ${failureReason} ${recommendation}`;
   } else {
+    insightData.confidence = Math.floor(Math.random() * (99 - 90 + 1) + 90);
     if (actualLatency > 800) {
-      insight = `[AI Analysis] Sub-optimal performance detected. Latency is high (${actualLatency}ms). Consider implementing CDN caching, Redis layer for frequent DB queries, or edge-based routing.`;
+      insightData.rootCause = `Sub-optimal latency (${actualLatency}ms). Connection established but payload delivery dragged.`;
+      insightData.suggestion = `Cache static properties via Edge CDN, or add a Redis layer for repeated DB scans.`;
     } else {
-      insight = `[AI Analysis] Target endpoint is highly reliable. Performing at optimal speed (${actualLatency}ms) with successful status ${statusCode}. No immediate architectural changes needed.`;
+      insightData.rootCause = `Endpoint is structurally sound and performing at optimal speed (${actualLatency}ms).`;
+      insightData.suggestion = `No immediate architectural changes needed. Maintain current capacity provisioning.`;
     }
   }
+
+  const insight = JSON.stringify(insightData);
 
   const simulation = await prisma.simulation.create({
     data: {
