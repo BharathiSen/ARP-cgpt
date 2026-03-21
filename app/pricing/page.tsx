@@ -56,6 +56,7 @@ export default function Pricing() {
         name: 'AI Reliability Lab',
         description: 'Pro Subscription',
         order_id: orderData.id,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         handler: async function (response: any) {
           try {
             const verifyRes = await fetch('/api/razorpay/verify', {
@@ -87,7 +88,9 @@ export default function Pricing() {
         },
       };
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const rzp = new (window as any).Razorpay(options);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       rzp.on('payment.failed', function (response: any) {
         console.error('Payment Failed:', response.error);
       });
