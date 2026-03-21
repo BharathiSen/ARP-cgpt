@@ -3,7 +3,9 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 
-export async function POST(req: Request) {
+export const dynamic = 'force-dynamic';
+
+export async function GET(req: Request) {
   try {
     const session = await getServerSession(authOptions);
 
@@ -11,14 +13,17 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const updatedUser = await prisma.user.update({
-      where: { email: session.user.email },
-      data: { isPaid: true },
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email }
     });
 
-    return NextResponse.json({ success: true, user: updatedUser });
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    return NextResponse.json({ isPaid: user.isPaid, isAdmin: user.isAdmin });
   } catch (error) {
-    console.error('Upgrade error:', error);
+    console.error('User status error:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
