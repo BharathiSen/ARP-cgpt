@@ -12,6 +12,8 @@ model User {
   email     String    @unique
   password  String
   name      String?
+  isAdmin   Boolean   @default(false)
+  isPaid    Boolean   @default(false)
   projects  Project[]
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt

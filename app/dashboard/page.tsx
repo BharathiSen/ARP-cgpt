@@ -4,11 +4,13 @@ import { useState, useEffect } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Play, Activity, Database, CheckCircle, XCircle, Info, LogOut, Loader2 } from 'lucide-react';
+import { Plus, Play, Activity, Database, CheckCircle, XCircle, Info, LogOut, Loader2, Lock } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { Button } from '@/components/Button';
+import { FakePaymentModal } from '@/components/FakePaymentModal';
 
 // Add simple interfaces for data models
+// ... (rest of imports keep unchanged below)
 interface Simulation {
   id: string;
   endpoint: string;
@@ -36,12 +38,21 @@ export default function Dashboard() {
   const [endpoint, setEndpoint] = useState('https://api.example.com/v1/users');
   const [isSimulating, setIsSimulating] = useState(false);
   const [simulationResult, setSimulationResult] = useState<Simulation | null>(null);
+  
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
 
   useEffect(() => {
     if (status === 'unauthenticated') { router.push('/login'); }
-    else if (status === 'authenticated') { fetchProjects(); }
+    else if (status === 'authenticated') {
+      const u = session?.user as any;
+      if (!u?.isAdmin && !u?.isPaid) {
+         // Do not redirect anymore, just don't fetch projects
+      } else {
+        fetchProjects();
+      }
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status]);
+  }, [status, session]);
 
   const fetchProjects = async () => {
     const res = await fetch('/api/projects');
@@ -94,11 +105,57 @@ export default function Dashboard() {
   ];
   const COLORS = ['#00C8FF', '#ff4d4d'];
 
+  const handleUpgradeSuccess = async () => {
+    try {
+      const res = await fetch('/api/upgrade', { method: 'POST' });
+      if (res.ok) {
+        // Just refresh the page so the session re-verifies from DB
+        window.location.reload();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const isRestricted = status === 'authenticated' && !(session?.user as any)?.isAdmin && !(session?.user as any)?.isPaid;
+
   if (status === 'loading') return (
     <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--bg-base)' }}>
       <Loader2 className="w-8 h-8 animate-spin" style={{ color: '#00C8FF' }} />
     </div>
   );
+
+  if (isRestricted) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-[#05070f]">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="max-w-md w-full bg-white/5 backdrop-blur-lg border border-white/10 rounded-2xl p-8 text-center shadow-2xl"
+        >
+          <div className="w-20 h-20 bg-[#00C8FF]/10 rounded-full flex items-center justify-center mx-auto mb-6">
+            <Lock className="w-10 h-10 text-[#00C8FF]" />
+          </div>
+          <h1 className="text-2xl font-bold text-white mb-3">🔒 Access Restricted</h1>
+          <p className="text-gray-400 mb-8 leading-relaxed">
+            Upgrade to access API simulations, custom endpoint testing, and AI-driven reliability insights.
+          </p>
+          <Button 
+            onClick={() => setIsPaymentModalOpen(true)}
+            className="w-full py-3 text-lg font-semibold bg-gradient-to-r from-[var(--neon-blue)] to-blue-500 rounded-xl"
+          >
+            Upgrade to Pro →
+          </Button>
+        </motion.div>
+        
+        <FakePaymentModal 
+          isOpen={isPaymentModalOpen} 
+          onClose={() => setIsPaymentModalOpen(false)} 
+          onSuccess={handleUpgradeSuccess}
+        />
+      </div>
+    );
+  }
 
   return (
     <main className="min-h-screen" style={{ background: 'var(--bg-base)' }}>

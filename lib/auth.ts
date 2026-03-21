@@ -43,32 +43,50 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
+        const isAdmin = user.email === 'bharathisenthilkumar28@gmail.com' || user.isAdmin;
+
+        if (isAdmin && !user.isAdmin) {
+            await prisma.user.update({
+                where: { id: user.id },
+                data: { isAdmin: true }
+            });
+        }
+
         return {
           id: user.id,
           email: user.email,
           name: user.name,
+          isAdmin,
+          isPaid: user.isPaid,
         };
       },
     }),
   ],
   callbacks: {
-    session: ({ session, token }) => {
-      return {
-        ...session,
-        user: {
-          ...session.user,
-          id: token.id,
-        },
-      };
-    },
-    jwt: ({ token, user }) => {
+    jwt: async ({ token, user, trigger, session }) => {
+      if (trigger === 'update' && session?.isPaid) {
+        token.isPaid = session.isPaid;
+      }
       if (user) {
-        return {
-          ...token,
-          id: user.id,
-        };
+        token.id = user.id;
+        token.isAdmin = (user as any).isAdmin;
+        token.isPaid = (user as any).isPaid;
+      } else if (trigger === 'update') {
+        const u = await prisma.user.findUnique({ where: { id: token.id as string } });
+        if (u) {
+          token.isAdmin = u.isAdmin;
+          token.isPaid = u.isPaid;
+        }
       }
       return token;
+    },
+    session: async ({ session, token }) => {
+      if (session.user) {
+        session.user.id = token.id as string;
+        session.user.isAdmin = (token as any).isAdmin;
+        session.user.isPaid = (token as any).isPaid;
+      }
+      return session;
     },
   },
 };
