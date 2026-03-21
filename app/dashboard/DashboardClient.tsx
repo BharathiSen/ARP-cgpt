@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Play, Activity, Database, CheckCircle, XCircle, Info, LogOut, Loader2 } from 'lucide-react';
+import { Plus, Play, Activity, Database, CheckCircle, XCircle, LogOut, Loader2, Sparkles, BrainCircuit, Zap } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { Button } from '@/components/Button';
 
@@ -37,6 +37,20 @@ export default function DashboardClient({ user }: { user: { isPaid: boolean, isA
   const [endpoint, setEndpoint] = useState('https://api.example.com/v1/users');
   const [isSimulating, setIsSimulating] = useState(false);
   const [simulationResult, setSimulationResult] = useState<Simulation | null>(null);
+
+  // --- FEATURE 2: AI TEST GENERATOR STATES ---
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [isAIGenerating, setIsAIGenerating] = useState(false);
+  const [generatedConfig, setGeneratedConfig] = useState<{
+    failureRate: number;
+    latencySpikes: number;
+    concurrency: number;
+    description: string;
+  } | null>(null);
+
+  // --- FEATURE 3: AI SUMMARY STATE ---
+  const [aiSummary, setAiSummary] = useState<string | null>(null);
+  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
 
   const fetchProjects = async () => {
     const res = await fetch('/api/projects');
@@ -82,6 +96,59 @@ export default function DashboardClient({ user }: { user: { isPaid: boolean, isA
     setIsSimulating(false);
     fetchProjects();
   };
+
+  // --- FEATURE 2: AI TEST GENERATOR LOGIC ---
+  const handleAIGenerate = async () => {
+    if (!aiPrompt.trim()) return;
+    setIsAIGenerating(true);
+    setGeneratedConfig(null);
+    
+    // Simulate AI thinking and rule-based generation
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    
+    const promptLower = aiPrompt.toLowerCase();
+    const config = {
+      failureRate: promptLower.includes('heavy') || promptLower.includes('load') ? 35 : 5,
+      latencySpikes: promptLower.includes('slow') || promptLower.includes('latency') ? 800 : 120,
+      concurrency: promptLower.includes('spike') || promptLower.includes('heavy') ? 1000 : 50,
+      description: ''
+    };
+    
+    config.description = `Generated Test Plan: Simulating ${config.concurrency} concurrent virtual users with expected ${config.failureRate}% failure injection and ${config.latencySpikes}ms latency p95.`;
+    
+    setGeneratedConfig(config);
+    setIsAIGenerating(false);
+  };
+
+  // --- FEATURE 3: AI SUMMARY LOGIC ---
+  useEffect(() => {
+    if (selectedProject?.simulations && selectedProject.simulations.length > 2) {
+      setIsGeneratingSummary(true);
+      
+      const timer = setTimeout(() => {
+        const sims = selectedProject.simulations!;
+        const avgLat = sims.reduce((acc, curr) => acc + curr.avgLatency, 0) / sims.length;
+        const failureCount = sims.filter(s => s.status === 'FAILED').length;
+        const failurePerc = (failureCount / sims.length) * 100;
+        
+        let summary = '';
+        if (failurePerc > 30) {
+          summary = `Critical reliability degradation. Over ${failurePerc.toFixed(0)}% of the last ${sims.length} simulations failed. Frequent timeouts observed. Immediate scaling or circuit breakers recommended.`;
+        } else if (avgLat > 500) {
+          summary = `Performance warning. The average latency over the last ${sims.length} runs is ${avgLat.toFixed(0)}ms. Consider employing edge caching and optimizing upstream dependencies.`;
+        } else {
+          summary = `Healthy system architecture. Over the last ${sims.length} simulations, your services maintained a ${100 - failurePerc}% success rate with stable latency (${avgLat.toFixed(0)}ms avg).`;
+        }
+        
+        setAiSummary(summary);
+        setIsGeneratingSummary(false);
+      }, 1000);
+      
+      return () => clearTimeout(timer);
+    } else {
+      setAiSummary(null);
+    }
+  }, [selectedProject]);
 
   const chartData = selectedProject?.simulations?.map((s: Simulation, idx: number) => ({
     name: `Run ${idx + 1}`,
@@ -203,6 +270,55 @@ export default function DashboardClient({ user }: { user: { isPaid: boolean, isA
                   </div>
 
                   <div className="flex flex-col gap-5">
+                    {/* --- FEATURE 2: AI TEST GENERATOR UI --- */}
+                    <div className="p-5 rounded-xl" style={{ background: 'rgba(0,200,255,0.04)', border: '1px solid rgba(0,200,255,0.1)' }}>
+                      <div className="flex items-center gap-2 mb-3">
+                        <Sparkles className="w-4 h-4 text-[#00C8FF]" />
+                        <h3 className="font-semibold text-sm text-white">AI Test Generator</h3>
+                      </div>
+                      <div className="flex gap-3">
+                        <input
+                          value={aiPrompt}
+                          onChange={(e) => setAiPrompt(e.target.value)}
+                          className="ds-input flex-1 text-sm bg-black/50"
+                          placeholder="e.g. Test my API under heavy load..."
+                        />
+                        <Button 
+                          onClick={handleAIGenerate} 
+                          isLoading={isAIGenerating}
+                          style={{ minWidth: '140px' }}
+                        >
+                          Generate
+                        </Button>
+                      </div>
+                      <AnimatePresence>
+                        {generatedConfig && (
+                          <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            exit={{ opacity: 0, height: 0 }}
+                            className="mt-4"
+                          >
+                            <p className="text-xs text-[#9AA6C4] mb-3">{generatedConfig.description}</p>
+                            <div className="grid grid-cols-3 gap-3">
+                              <div className="bg-black/30 p-3 rounded-lg border border-white/5">
+                                <p className="text-[10px] uppercase text-[#9AA6C4] font-semibold mb-1">Failure Injection</p>
+                                <p className="text-white font-mono">{generatedConfig.failureRate}%</p>
+                              </div>
+                              <div className="bg-black/30 p-3 rounded-lg border border-white/5">
+                                <p className="text-[10px] uppercase text-[#9AA6C4] font-semibold mb-1">Latency Spikes</p>
+                                <p className="text-white font-mono">{generatedConfig.latencySpikes}ms</p>
+                              </div>
+                              <div className="bg-black/30 p-3 rounded-lg border border-white/5">
+                                <p className="text-[10px] uppercase text-[#9AA6C4] font-semibold mb-1">Concurrency</p>
+                                <p className="text-white font-mono">{generatedConfig.concurrency} VU</p>
+                              </div>
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+
                     <div>
                       <label className="ds-label">Target Endpoint URL</label>
                       <input
@@ -255,10 +371,14 @@ export default function DashboardClient({ user }: { user: { isPaid: boolean, isA
                         </div>
                       </div>
 
-                      <div className="flex items-start gap-3 rounded-xl p-4 text-sm"
-                           style={{ background: 'rgba(0,200,255,0.06)', border: '1px solid rgba(0,200,255,0.15)' }}>
-                        <Info className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: '#00C8FF' }} />
-                        <p className="italic" style={{ color: '#9AA6C4' }}>{simulationResult.insight}</p>
+                      {/* --- FEATURE 1: AI FAILURE ANALYSIS UI --- */}
+                      <div className="flex flex-col gap-2 rounded-xl p-4 text-sm relative overflow-hidden"
+                           style={{ background: 'rgba(0,200,255,0.06)', border: '1px solid rgba(0,200,255,0.3)' }}>
+                        <div className="flex items-center gap-2 mb-1">
+                          <BrainCircuit className="w-4 h-4" style={{ color: '#00C8FF' }} />
+                          <span className="font-bold text-[#00C8FF] text-xs uppercase tracking-wider">AI Failure Analysis</span>
+                        </div>
+                        <p className="leading-relaxed" style={{ color: '#9AA6C4' }}>{simulationResult.insight}</p>
                       </div>
 
                       {/* decorative glow */}
@@ -269,7 +389,23 @@ export default function DashboardClient({ user }: { user: { isPaid: boolean, isA
 
                 {/* ── Data Visualization ── */}
                 {selectedProject?.simulations && selectedProject.simulations.length > 0 && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <>
+                    {/* --- FEATURE 3: AI SUMMARY UI --- */}
+                    <div className="ds-card p-6 mb-5" style={{ background: 'linear-gradient(to right, rgba(0,200,255,0.05), rgba(0,0,0,0))' }}>
+                      <div className="flex items-center gap-2 mb-3">
+                        <Zap className="w-5 h-5 text-[#00C8FF]" />
+                        <h3 className="font-bold text-white text-sm uppercase tracking-widest">AI Portfolio Analysis</h3>
+                      </div>
+                      {isGeneratingSummary ? (
+                        <div className="flex items-center gap-3 text-sm text-[#9AA6C4]">
+                          <Loader2 className="w-4 h-4 animate-spin text-[#00C8FF]" /> Generating insights across {selectedProject.simulations.length} runs...
+                        </div>
+                      ) : (
+                        <p className="text-sm leading-relaxed text-[#9AA6C4]">{aiSummary}</p>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     <div className="ds-card p-6">
                       <h3 className="font-bold text-white text-sm uppercase tracking-widest mb-4">Latency Trend</h3>
                       <div className="h-48">
@@ -317,6 +453,7 @@ export default function DashboardClient({ user }: { user: { isPaid: boolean, isA
                       </div>
                     </div>
                   </div>
+                  </>
                 )}
 
                 {/* ── Simulation History ── */}

@@ -38,22 +38,32 @@ export async function runRealSimulation(projectId: string, endpoint: string) {
 
   const status = isFailed ? 'FAILED' : 'SUCCESS';
 
+  // --- FEATURE 1: AI FAILURE ANALYSIS ---
   let insight = '';
   if (isFailed) {
+    let failureReason = '';
+    let recommendation = '';
+    
     if (statusCode === 408) {
-      insight = `Endpoint timed out (>${actualLatency}ms). Suggest increasing API timeouts or vertically scaling the backend.`;
+      failureReason = `Critical Timeout detected (> ${actualLatency}ms).`;
+      recommendation = `Increase API gateway timeouts, vertically scale the database, or introduce asynchronous processing queues for heavy tasks.`;
     } else if (statusCode === 401 || statusCode === 403) {
-      insight = `Endpoint returned HTTP ${statusCode} (Unauthorized/Forbidden). Ensure your testing agent passes required Authentication headers or tokens.`;
+      failureReason = `Authentication/Authorization failure (HTTP ${statusCode}).`;
+      recommendation = `Verify JWT expirations, CORS policies, and ensure the simulation agent holds the proper OAuth scopes.`;
     } else if (statusCode === 429) {
-      insight = `Endpoint returned HTTP 429 (Too Many Requests). A Rate Limit or WAF (like Cloudflare) is blocking the test.`;
+      failureReason = `Rate limit exceeded (HTTP 429 Too Many Requests).`;
+      recommendation = `API is dropping connections. Consider configuring a WAF bypass rule for internal testing or implementing exponential backoff in client SDKs.`;
     } else {
-      insight = `Endpoint returned HTTP ${statusCode}. Suggest implementing retry with exponential backoff and circuit breakers.`;
+      failureReason = `Unexpected Internal or Upstream Error (HTTP ${statusCode}).`;
+      recommendation = `Analyze backend logs for crash stack traces. Implement circuit breakers to avoid cascading failures.`;
     }
+    
+    insight = `[AI Analysis] ${failureReason} ${recommendation}`;
   } else {
     if (actualLatency > 800) {
-      insight = `Endpoint is slow (latency: ${actualLatency}ms). Consider implementing CDN caching, DB query optimization, or edge routing.`;
+      insight = `[AI Analysis] Sub-optimal performance detected. Latency is high (${actualLatency}ms). Consider implementing CDN caching, Redis layer for frequent DB queries, or edge-based routing.`;
     } else {
-      insight = `Endpoint performed securely with ${actualLatency}ms latency and status ${statusCode}. Architecture handles current load well.`;
+      insight = `[AI Analysis] Target endpoint is highly reliable. Performing at optimal speed (${actualLatency}ms) with successful status ${statusCode}. No immediate architectural changes needed.`;
     }
   }
 
