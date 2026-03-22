@@ -3,8 +3,8 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Lock } from 'lucide-react';
-import { Button } from '@/components/Button';
-import { FakePaymentModal } from '@/components/FakePaymentModal';
+import { Button } from '@/components/ui/Button';
+import { FakePaymentModal } from '@/components/dashboard/FakePaymentModal';
 
 export default function UpgradeLock() {
   const [isOpen, setIsOpen] = useState(false);

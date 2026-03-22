@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Activity, Menu, X } from 'lucide-react';
 import { useSession, signOut } from 'next-auth/react';
 import { usePathname, useRouter } from 'next/navigation';
-import { Button } from '@/components/Button';
+import { Button } from '@/components/ui/Button';
 
 export default function Navbar() {
   const { data: session } = useSession();

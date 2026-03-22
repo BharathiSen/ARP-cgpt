@@ -2,7 +2,7 @@
 
 import { motion } from 'framer-motion';
 import { CheckCircle2, Globe } from 'lucide-react';
-import { Button } from '@/components/Button';
+import { Button } from '@/components/ui/Button';
 
 const tiers = [
   {

@@ -2,8 +2,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { redirect } from "next/navigation";
-import DashboardClient from "./DashboardClient";
-import UpgradeLock from "./UpgradeLock";
+import DashboardClient from "@/components/dashboard/DashboardClient";
+import UpgradeLock from "@/components/dashboard/UpgradeLock";
 
 export default async function Dashboard() {
   const session = await getServerSession(authOptions);

@@ -2,7 +2,7 @@
 
 import { motion } from 'framer-motion';
 import { AlertCircle, Clock, ZapOff } from 'lucide-react';
-import ReliabilityTestScenario from './ReliabilityTestScenario';
+import ReliabilityTestScenario from '@/components/marketing/ReliabilityTestScenario';
 
 export default function ProblemSection() {
   return (

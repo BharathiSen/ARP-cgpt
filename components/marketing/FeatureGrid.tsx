@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { features } from '../data/features';
+import { features } from '@/lib/features';
 
 export default function FeatureGrid() {
   return (

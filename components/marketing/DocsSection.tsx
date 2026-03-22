@@ -3,7 +3,7 @@
 import { motion } from 'framer-motion';
 import { Terminal, Copy, Check, Info } from 'lucide-react';
 import { useState } from 'react';
-import { Button } from '@/components/Button';
+import { Button } from '@/components/ui/Button';
 
 export default function DocsSection() {
   const [copied, setCopied] = useState(false);

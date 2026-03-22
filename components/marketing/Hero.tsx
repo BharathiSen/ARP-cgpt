@@ -1,8 +1,8 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Button } from '@/components/Button';
-import HeroVideoBackground from './HeroVideoBackground';
+import { Button } from '@/components/ui/Button';
+import HeroVideoBackground from '@/components/marketing/HeroVideoBackground';
 
 export default function Hero() {
   return (

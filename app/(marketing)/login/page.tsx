@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Activity } from 'lucide-react';
 import Link from 'next/link';
-import { Button } from '@/components/Button';
+import { Button } from '@/components/ui/Button';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');

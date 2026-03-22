@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Shield, CheckCircle, Loader2, X, Lock } from 'lucide-react';
-import { Button } from './Button';
+import { Button } from '@/components/ui/Button';
 
 export interface FakePaymentModalProps {
   isOpen: boolean;

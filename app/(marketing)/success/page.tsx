@@ -5,7 +5,7 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { CheckCircle2, Loader2, ArrowRight } from 'lucide-react';
-import { Button } from '@/components/Button';
+import { Button } from '@/components/ui/Button';
 
 export default function SuccessPage() {
   const { data: session, status, update } = useSession();

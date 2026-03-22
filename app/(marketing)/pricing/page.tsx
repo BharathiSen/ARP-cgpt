@@ -4,7 +4,7 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Loader2, Lock, CheckCircle2 } from 'lucide-react';
-import { Button } from '@/components/Button';
+import { Button } from '@/components/ui/Button';
 import { useState } from 'react';
 
 export default function Pricing() {

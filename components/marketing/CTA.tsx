@@ -2,7 +2,7 @@
 
 import { motion } from 'framer-motion';
 import { ArrowRight, Play } from 'lucide-react';
-import { Button } from '@/components/Button';
+import { Button } from '@/components/ui/Button';
 
 export default function CTA() {
   return (

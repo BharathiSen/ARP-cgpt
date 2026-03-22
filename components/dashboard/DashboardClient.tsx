@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Play, Activity, Database, CheckCircle, XCircle, LogOut, Loader2, Sparkles, BrainCircuit, Zap, Key, Download } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { Button } from '@/components/Button';
+import { Button } from '@/components/ui/Button';
 import { toast } from 'react-hot-toast';
 
 // Add simple interfaces for data models
