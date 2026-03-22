@@ -4,15 +4,15 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "npm run build:socket && next build",
-    "build:socket": "tsc -p tsconfig.socket.json",
+    "build": "next build",
     "start": "next start",
-    "start:socket": "node dist/socket.js",
     "lint": "next lint"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.1",
     "@types/bcryptjs": "^2.4.6",
+    "@upstash/ratelimit": "^2.0.8",
+    "@upstash/redis": "^1.37.0",
     "bcryptjs": "^3.0.3",
     "framer-motion": "^11.18.2",
     "lucide-react": "^0.440.0",
@@ -21,16 +21,14 @@
     "razorpay": "^2.9.6",
     "react": "^18",
     "react-dom": "^18",
-    "recharts": "^2.12.7",
-    "stripe": "^20.4.1",
-    "ws": "^8.19.0"
+    "react-hot-toast": "^2.6.0",
+    "recharts": "^2.12.7"
   },
   "devDependencies": {
     "@prisma/client": "^5.22.0",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
-    "@types/ws": "^8.18.1",
     "autoprefixer": "^10.4.27",
     "eslint": "^8",
     "eslint-config-next": "14.2.11",

@@ -82,9 +82,9 @@ export const authOptions: NextAuthOptions = {
     },
     session: async ({ session, token }) => {
       if (session.user) {
-        session.user.id = token.id as string;
-        session.user.isAdmin = (token as any).isAdmin;
-        session.user.isPaid = (token as any).isPaid;
+        (session.user as any).id = token.id as string;
+        (session.user as any).isAdmin = (token as any).isAdmin;
+        (session.user as any).isPaid = (token as any).isPaid;
       }
       return session;
     },

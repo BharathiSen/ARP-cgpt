@@ -40,3 +40,7 @@ next-env.d.ts
 /hero.png
 
 /app/generated/prisma
+
+# Prisma local database
+prisma/dev.db
+prisma/*.db-journal

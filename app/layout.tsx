@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import { Providers } from '@/components/Providers';
 import Navbar from '@/components/Navbar';
+import { Toaster } from 'react-hot-toast';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -22,6 +23,17 @@ export default function RootLayout({
         <Providers>
           <Navbar />
           {children}
+          <Toaster 
+            position="bottom-right" 
+            toastOptions={{ 
+              style: { 
+                background: '#0a0f1c', 
+                color: '#fff', 
+                border: '1px solid #1e293b' 
+              },
+              success: { iconTheme: { primary: '#00C8FF', secondary: '#0a0f1c' } }
+            }} 
+          />
         </Providers>
       </body>
     </html>

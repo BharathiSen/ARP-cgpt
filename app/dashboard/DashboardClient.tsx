@@ -4,9 +4,10 @@ import { useState, useEffect } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Play, Activity, Database, CheckCircle, XCircle, LogOut, Loader2, Sparkles, BrainCircuit, Zap } from 'lucide-react';
+import { Plus, Play, Activity, Database, CheckCircle, XCircle, LogOut, Loader2, Sparkles, BrainCircuit, Zap, Key, Download } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { Button } from '@/components/Button';
+import { toast } from 'react-hot-toast';
 
 // Add simple interfaces for data models
 // ... (rest of imports keep unchanged below)
@@ -56,6 +57,22 @@ export default function DashboardClient({ user }: { user: { isPaid: boolean, isA
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
 
+  // --- FEATURE: API KEY ---
+  const [apiKey, setApiKey] = useState<string | null>(null);
+  const [isApiKeyLoading, setIsApiKeyLoading] = useState(false);
+  const [newlyGeneratedKey, setNewlyGeneratedKey] = useState<string | null>(null);
+  const [isApiKeyVisible, setIsApiKeyVisible] = useState(false);
+
+  const maskApiKey = (key: string | null) => {
+    if (!key) return '';
+    return key.slice(0, 12) + "**************" + key.slice(-6);
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    toast.success('API Key copied to clipboard!');
+  };
+
   const fetchProjects = async () => {
     const res = await fetch('/api/projects');
     const data = await res.json();
@@ -65,10 +82,78 @@ export default function DashboardClient({ user }: { user: { isPaid: boolean, isA
     }
   };
 
+  const fetchApiKey = async () => {
+    try {
+      const res = await fetch('/api/user/api-key');
+      const data = await res.json();
+      if (res.ok && data.apiKey) {
+        setApiKey(data.apiKey);
+      }
+    } catch (e) {
+      console.error('Failed to fetch api key background', e);
+    }
+  };
+
+  const handleGenerateApiKey = async () => {
+    setIsApiKeyLoading(true);
+    setNewlyGeneratedKey(null);
+    try {
+      const res = await fetch('/api/user/generate-api-key', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok && data.apiKey) {
+        setApiKey(`${data.apiKey.slice(0, 12)} **** ${data.apiKey.slice(-4)}`);
+        setNewlyGeneratedKey(data.apiKey);
+        toast.success('API Key generated successfully!');
+
+        // Auto-download file
+        const blob = new Blob([`AI Reliability Lab API Key\n\nYour Secret Key:\n${data.apiKey}\n\nKeep this key secure. Do not share it.`], { type: 'text/plain' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `ai-reliability-lab-api-key.txt`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+      } else {
+        toast.error(data.error || 'Failed to generate API key');
+      }
+    } catch (e) {
+      toast.error('Error connecting to server.');
+    } finally {
+      setIsApiKeyLoading(false);
+    }
+  };
+
+  const handleExportReport = async () => {
+    if (!selectedProject) return;
+    try {
+      toast.loading('Exporting report...', { id: 'export' });
+      const res = await fetch(`/api/simulations/export?projectId=${selectedProject.id}`);
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || 'Export failed');
+      }
+      
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `report_${selectedProject.name.replace(/\s+/g, '_')}.json`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      
+      toast.success('Report exported successfully!', { id: 'export' });
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to export report.', { id: 'export' });
+    }
+  };
+
   useEffect(() => {
     if (status === 'unauthenticated') { router.push('/login'); }
     else if (status === 'authenticated') {
       fetchProjects();
+      fetchApiKey();
       // Read prompt from URL if present
       if (typeof window !== 'undefined') {
         const urlParams = new URLSearchParams(window.location.search);
@@ -126,15 +211,23 @@ export default function DashboardClient({ user }: { user: { isPaid: boolean, isA
       clearInterval(interval);
       setSimulationProgress(100);
       
+      if (!res.ok) {
+        toast.error(data.message || 'Simulation failed to start');
+        setIsSimulating(false);
+        return;
+      }
+      
       setTimeout(() => {
         setSimulationResult(data);
         setIsSimulating(false);
+        toast.success('Simulation completed successfully!');
         fetchProjects();
       }, 500); // short delay to show 100%
       
-    } catch (e) {
+    } catch (e: any) {
       clearInterval(interval);
       setIsSimulating(false);
+      toast.error('Network error during simulation.');
     }
   };
 
@@ -288,6 +381,100 @@ export default function DashboardClient({ user }: { user: { isPaid: boolean, isA
                   </button>
                 ))}
               </div>
+            </div>
+
+            {/* API Settings & Export Card */}
+            <div className="ds-card p-6 mt-6">
+              <div className="flex items-center gap-2 mb-4">
+                <Key className="w-4 h-4" style={{ color: '#00C8FF' }} />
+                <h2 className="font-bold text-white text-sm uppercase tracking-widest">Developer API</h2>
+              </div>
+              <p className="text-xs mb-4" style={{ color: '#9AA6C4' }}>
+                Use your API key to integrate AI Reliability Lab directly into your CI/CD pipelines.
+              </p>
+              
+              <div className="space-y-3">
+                {newlyGeneratedKey ? (
+                  <div className="flex flex-col gap-2">
+                     <p className="text-xs text-yellow-400 mb-1">
+                       Copy and store this key securely. You won&apos;t be able to see it again.
+                     </p>
+                     <div className="p-3 rounded break-all text-xs font-mono" style={{ background: 'rgba(8,18,35,0.6)', border: '1px solid rgba(250,204,21,0.4)', color: '#00C8FF' }}>
+                       {newlyGeneratedKey}
+                     </div>
+                     <div className="flex gap-2">
+                       <Button 
+                         onClick={() => copyToClipboard(newlyGeneratedKey)}
+                         variant="ghost" 
+                         className="flex-1 text-xs py-1.5 border border-[#1e293b]"
+                       >
+                         Copy Key
+                       </Button>
+                       <Button 
+                         onClick={() => setNewlyGeneratedKey(null)}
+                         variant="ghost" 
+                         className="flex-1 text-xs py-1.5"
+                       >
+                         I&apos;ve saved it securely
+                       </Button>
+                     </div>
+                  </div>
+                ) : apiKey ? (
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center justify-between p-3 rounded text-xs font-mono" style={{ background: 'rgba(8,18,35,0.6)', border: '1px solid rgba(0,200,255,0.2)', color: '#00C8FF' }}>
+                      <span className="truncate mr-2">{isApiKeyVisible ? apiKey : maskApiKey(apiKey)}</span>
+                      <button 
+                        onClick={() => setIsApiKeyVisible(!isApiKeyVisible)}
+                        className="text-xs text-ds-muted hover:text-white transition-colors flex-shrink-0"
+                      >
+                        [{isApiKeyVisible ? 'Hide' : 'Show'}]
+                      </button>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button 
+                        onClick={() => copyToClipboard(apiKey)}
+                        variant="ghost" 
+                        className="flex-1 text-xs py-1.5 border border-[#1e293b]"
+                      >
+                        Copy
+                      </Button>
+                      <Button 
+                        onClick={handleGenerateApiKey} 
+                        isLoading={isApiKeyLoading}
+                        variant="ghost" 
+                        className="flex-1 text-xs py-1.5"
+                      >
+                        Regenerate Key
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <Button 
+                    onClick={handleGenerateApiKey} 
+                    isLoading={isApiKeyLoading}
+                    variant="ghost" 
+                    className="w-full text-sm py-2"
+                  >
+                    Generate Secret Key
+                  </Button>
+                )}
+              </div>
+
+              {selectedProject && selectedProject.simulations && selectedProject.simulations.length > 0 && (
+                <div className="mt-6 pt-6" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                  <div className="flex items-center gap-2 mb-4">
+                    <Download className="w-4 h-4" style={{ color: '#00C8FF' }} />
+                    <h2 className="font-bold text-white text-sm uppercase tracking-widest">Export Data</h2>
+                  </div>
+                  <Button 
+                    onClick={handleExportReport} 
+                    variant="ghost" 
+                    className="w-full text-sm py-2"
+                  >
+                    Download JSON Report
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
 
