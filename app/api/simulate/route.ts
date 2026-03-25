@@ -67,7 +67,12 @@ export async function POST(req: Request) {
 
     await logApiRequest({ userId: user.id, endpoint, status: 200, latency });
 
-    return NextResponse.json(simulation);
+    return NextResponse.json({
+      ...simulation,
+      latency: simulation.latency,
+      status: simulation.status,
+      ai: simulation.ai,
+    });
   } catch (error) {
     console.error('Simulation error:', error);
     return NextResponse.json(

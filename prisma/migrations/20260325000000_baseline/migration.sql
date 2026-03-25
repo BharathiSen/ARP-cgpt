@@ -35,6 +35,11 @@ CREATE TABLE "Simulation" (
     "status" TEXT NOT NULL,
     "avgLatency" DOUBLE PRECISION NOT NULL,
     "insight" TEXT NOT NULL,
+    "confidenceScore" DOUBLE PRECISION,
+    "riskLevel" TEXT,
+    "insights" JSONB,
+    "suggestions" JSONB,
+    "anomalies" JSONB,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "Simulation_pkey" PRIMARY KEY ("id")

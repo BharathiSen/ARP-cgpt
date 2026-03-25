@@ -17,7 +17,28 @@ interface Simulation {
   status: string;
   avgLatency: number;
   insight?: string;
+  confidenceScore?: number;
+  riskLevel?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  insights?: string[];
+  suggestions?: string[];
+  anomalies?: string[];
+  ai?: {
+    confidenceScore: number;
+    riskLevel: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+    insights: string[];
+    suggestions: string[];
+    anomalies: string[];
+    confidence?: number;
+    rootCause?: string;
+    suggestion?: string;
+  };
   createdAt: string;
+}
+
+interface ProjectSummary {
+  overallHealth: string;
+  majorRisks: string[];
+  recommendations: string[];
 }
 
 interface Project {
@@ -55,7 +76,7 @@ export default function DashboardClient({ user }: { user: { isPaid: boolean, isA
   } | null>(null);
 
   // --- FEATURE 3: AI SUMMARY STATE ---
-  const [aiSummary, setAiSummary] = useState<string | null>(null);
+  const [aiSummary, setAiSummary] = useState<ProjectSummary | null>(null);
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
 
   // --- FEATURE: API KEY ---
@@ -72,6 +93,61 @@ export default function DashboardClient({ user }: { user: { isPaid: boolean, isA
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     toast.success('API Key copied to clipboard!');
+  };
+
+  const getSimulationAI = (sim: Simulation) => {
+    if (sim.ai) return sim.ai;
+
+    if (sim.insight) {
+      try {
+        const legacy = JSON.parse(sim.insight) as {
+          confidence?: number;
+          rootCause?: string;
+          suggestion?: string;
+          confidenceScore?: number;
+          riskLevel?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+          insights?: string[];
+          suggestions?: string[];
+          anomalies?: string[];
+        };
+
+        const confidenceScore = Math.round(
+          legacy.confidenceScore ?? legacy.confidence ?? 0
+        );
+
+        return {
+          confidenceScore,
+          riskLevel: legacy.riskLevel ?? 'MEDIUM',
+          insights: legacy.insights ?? (legacy.rootCause ? [legacy.rootCause] : []),
+          suggestions: legacy.suggestions ?? (legacy.suggestion ? [legacy.suggestion] : []),
+          anomalies: legacy.anomalies ?? [],
+          confidence: legacy.confidence,
+          rootCause: legacy.rootCause,
+          suggestion: legacy.suggestion,
+        };
+      } catch {
+        return null;
+      }
+    }
+
+    if (sim.insights || sim.suggestions || sim.anomalies) {
+      return {
+        confidenceScore: Math.round(sim.confidenceScore ?? 0),
+        riskLevel: sim.riskLevel ?? 'MEDIUM',
+        insights: sim.insights ?? [],
+        suggestions: sim.suggestions ?? [],
+        anomalies: sim.anomalies ?? [],
+      };
+    }
+
+    return null;
+  };
+
+  const getRiskStyle = (risk: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL') => {
+    if (risk === 'LOW') return { color: '#00C8FF', border: '1px solid rgba(0,200,255,0.35)', background: 'rgba(0,200,255,0.12)' };
+    if (risk === 'MEDIUM') return { color: '#f59e0b', border: '1px solid rgba(245,158,11,0.35)', background: 'rgba(245,158,11,0.12)' };
+    if (risk === 'HIGH') return { color: '#fb7185', border: '1px solid rgba(251,113,133,0.35)', background: 'rgba(251,113,133,0.12)' };
+    return { color: '#ef4444', border: '1px solid rgba(239,68,68,0.4)', background: 'rgba(239,68,68,0.12)' };
   };
 
   const fetchProjects = async () => {
@@ -260,33 +336,55 @@ export default function DashboardClient({ user }: { user: { isPaid: boolean, isA
 
   // --- FEATURE 3: AI SUMMARY LOGIC ---
   useEffect(() => {
-    if (selectedProject?.simulations && selectedProject.simulations.length > 2) {
+    if (selectedProject?.simulations && selectedProject.simulations.length > 0) {
       setIsGeneratingSummary(true);
-      
-      const timer = setTimeout(() => {
-        const sims = selectedProject.simulations!;
-        const avgLat = sims.reduce((acc, curr) => acc + curr.avgLatency, 0) / sims.length;
-        const failureCount = sims.filter(s => s.status === 'FAILED').length;
-        const failurePerc = (failureCount / sims.length) * 100;
-        
-        let summary = '';
-        if (failurePerc > 30) {
-          summary = `Critical reliability degradation. Over ${failurePerc.toFixed(0)}% of the last ${sims.length} simulations failed. Frequent timeouts observed. Immediate scaling or circuit breakers recommended.`;
-        } else if (avgLat > 500) {
-          summary = `Performance warning. The average latency over the last ${sims.length} runs is ${avgLat.toFixed(0)}ms. Consider employing edge caching and optimizing upstream dependencies.`;
-        } else {
-          summary = `Healthy system architecture. Over the last ${sims.length} simulations, your services maintained a ${100 - failurePerc}% success rate with stable latency (${avgLat.toFixed(0)}ms avg).`;
+
+      const fetchSummary = async () => {
+        try {
+          const res = await fetch(`/api/simulations/summary?projectId=${selectedProject.id}`);
+          if (!res.ok) throw new Error('Summary request failed');
+          const data = await res.json();
+          setAiSummary(data);
+        } catch {
+          const sims = selectedProject.simulations ?? [];
+          if (!sims.length) {
+            setAiSummary({
+              overallHealth: 'No simulation data available yet.',
+              majorRisks: ['Insufficient telemetry to assess reliability risks.'],
+              recommendations: ['Run multiple simulations to generate reliability insights.'],
+            });
+            return;
+          }
+          const avgLat = sims.reduce((acc, curr) => acc + curr.avgLatency, 0) / sims.length;
+          const failureCount = sims.filter(s => s.status === 'FAILED').length;
+          const failurePerc = (failureCount / sims.length) * 100;
+
+          setAiSummary({
+            overallHealth:
+              failurePerc > 30
+                ? 'Critical reliability degradation with elevated failure concentration.'
+                : avgLat > 500
+                  ? 'Performance risk present due to elevated average latency.'
+                  : 'Healthy reliability posture with stable baseline performance.',
+            majorRisks: [
+              `Failure ratio: ${failurePerc.toFixed(1)}% over ${sims.length} runs`,
+              `Average latency: ${avgLat.toFixed(0)}ms`,
+            ],
+            recommendations: [
+              'Enable deeper endpoint-level tracing and alert thresholds.',
+              'Run periodic stress tests to detect degradation patterns earlier.',
+            ],
+          });
+        } finally {
+          setIsGeneratingSummary(false);
         }
-        
-        setAiSummary(summary);
-        setIsGeneratingSummary(false);
-      }, 1000);
-      
-      return () => clearTimeout(timer);
+      };
+
+      fetchSummary();
     } else {
       setAiSummary(null);
     }
-  }, [selectedProject]);
+  }, [selectedProject?.id, selectedProject?.simulations]);
 
   const chartData = selectedProject?.simulations?.map((s: Simulation, idx: number) => ({
     name: `Run ${idx + 1}`,
@@ -681,45 +779,61 @@ export default function DashboardClient({ user }: { user: { isPaid: boolean, isA
                       {/* --- FEATURE 1: AI FAILURE ANALYSIS UI --- */}
                       <div className="flex flex-col gap-2 rounded-xl p-5 text-sm relative overflow-hidden"
                            style={{ background: 'rgba(0,200,255,0.06)', border: '1px solid rgba(0,200,255,0.3)' }}>
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-2">
-                            <BrainCircuit className="w-5 h-5" style={{ color: '#00C8FF' }} />
-                            <span className="font-bold text-[#00C8FF] text-xs uppercase tracking-widest">AI Insights</span>
-                          </div>
-                          {simulationResult.insight && (() => {
-                            try {
-                              const data = JSON.parse(simulationResult.insight);
-                              return (
-                                <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-[#00C8FF]/10 border border-[#00C8FF]/20">
-                                  <Sparkles className="w-3 h-3 text-[#00C8FF]" />
-                                  <span className="text-[10px] font-mono text-[#00C8FF]">{data.confidence}% Confidence</span>
-                                </div>
-                              );
-                            } catch (e) { return null; }
-                          })()}
-                        </div>
-                        
                         {(() => {
-                          try {
-                            if (!simulationResult.insight) return null;
-                            const data = JSON.parse(simulationResult.insight);
-                            return (
-                              <div className="mt-1 flex flex-col gap-3">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                  <div className="bg-black/30 p-3 rounded-lg border border-white/5">
-                                    <span className="text-[10px] text-[#ff4d4d] uppercase font-bold tracking-wider mb-1 block">Root Cause Analysis</span>
-                                    <p className="text-white/90 text-xs leading-relaxed">{data.rootCause}</p>
-                                  </div>
-                                  <div className="bg-black/30 p-3 rounded-lg border border-[#00C8FF]/10">
-                                    <span className="text-[10px] text-[#00C8FF] uppercase font-bold tracking-wider mb-1 block">Suggested Fix</span>
-                                    <p className="text-white/90 text-xs leading-relaxed">{data.suggestion}</p>
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          } catch (e) {
+                          const aiData = getSimulationAI(simulationResult);
+                          if (!aiData) {
                             return <p className="leading-relaxed" style={{ color: '#9AA6C4' }}>{simulationResult.insight}</p>;
                           }
+                          const riskStyle = getRiskStyle(aiData.riskLevel);
+
+                          return (
+                            <>
+                              <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-2">
+                                  <BrainCircuit className="w-5 h-5" style={{ color: '#00C8FF' }} />
+                                  <span className="font-bold text-[#00C8FF] text-xs uppercase tracking-widest">AI Insights</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-[#00C8FF]/10 border border-[#00C8FF]/20">
+                                    <Sparkles className="w-3 h-3 text-[#00C8FF]" />
+                                    <span className="text-[10px] font-mono text-[#00C8FF]">{aiData.confidenceScore}% Confidence</span>
+                                  </div>
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={riskStyle}>
+                                    {aiData.riskLevel}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-1">
+                                <div className="bg-black/30 p-3 rounded-lg border border-white/5">
+                                  <span className="text-[10px] text-[#ff4d4d] uppercase font-bold tracking-wider mb-1 block">Insights</span>
+                                  <ul className="text-white/90 text-xs leading-relaxed space-y-1">
+                                    {aiData.insights.map((item, idx) => <li key={`ins-${idx}`}>- {item}</li>)}
+                                  </ul>
+                                </div>
+                                <div className="bg-black/30 p-3 rounded-lg border border-[#00C8FF]/10">
+                                  <span className="text-[10px] text-[#00C8FF] uppercase font-bold tracking-wider mb-1 block">Suggestions</span>
+                                  <ul className="text-white/90 text-xs leading-relaxed space-y-1">
+                                    {aiData.suggestions.map((item, idx) => <li key={`sug-${idx}`}>- {item}</li>)}
+                                  </ul>
+                                </div>
+                              </div>
+
+                              {aiData.anomalies.length > 0 && (
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                  {aiData.anomalies.map((anomaly, idx) => (
+                                    <span
+                                      key={`anom-${idx}`}
+                                      className="text-[10px] px-2 py-1 rounded-full border"
+                                      style={{ borderColor: 'rgba(255,77,77,0.35)', color: '#ff9b9b', background: 'rgba(255,77,77,0.08)' }}
+                                    >
+                                      {anomaly}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </>
+                          );
                         })()}
                       </div>
 
@@ -743,7 +857,25 @@ export default function DashboardClient({ user }: { user: { isPaid: boolean, isA
                           <Loader2 className="w-4 h-4 animate-spin text-[#00C8FF]" /> Generating insights across {selectedProject.simulations.length} runs...
                         </div>
                       ) : (
-                        <p className="text-sm leading-relaxed text-[#9AA6C4]">{aiSummary}</p>
+                        <div className="space-y-3 text-sm leading-relaxed text-[#9AA6C4]">
+                          <p>{aiSummary?.overallHealth}</p>
+                          {aiSummary?.majorRisks?.length ? (
+                            <div>
+                              <span className="text-[10px] uppercase tracking-widest font-semibold text-[#ff9b9b]">Major Risks</span>
+                              <ul className="mt-1 space-y-1">
+                                {aiSummary.majorRisks.map((risk, idx) => <li key={`risk-${idx}`}>- {risk}</li>)}
+                              </ul>
+                            </div>
+                          ) : null}
+                          {aiSummary?.recommendations?.length ? (
+                            <div>
+                              <span className="text-[10px] uppercase tracking-widest font-semibold text-[#00C8FF]">Recommendations</span>
+                              <ul className="mt-1 space-y-1">
+                                {aiSummary.recommendations.map((rec, idx) => <li key={`rec-${idx}`}>- {rec}</li>)}
+                              </ul>
+                            </div>
+                          ) : null}
+                        </div>
                       )}
                     </div>
 

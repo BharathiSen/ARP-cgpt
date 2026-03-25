@@ -42,5 +42,10 @@ model Simulation {
   status      String
   avgLatency  Float
   insight     String
+  confidenceScore Float?
+  riskLevel       String?
+  insights        Json?
+  suggestions     Json?
+  anomalies       Json?
   createdAt   DateTime @default(now())
 }
