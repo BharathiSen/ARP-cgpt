@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import crypto from 'crypto';
+import { sendUpgradeEmail } from '@/lib/email';
 
 export async function POST(req: Request) {
   try {
@@ -28,10 +29,15 @@ export async function POST(req: Request) {
 
     if (expectedSignature === razorpay_signature) {
       // Signature is valid, grant access
-      await prisma.user.update({
-        where: { id: session.user.id },
+      const user = await prisma.user.update({
+        where: { id: (session.user as any).id },
         data: { isPaid: true },
       });
+
+      // Send upgrade email
+      if (user.email) {
+        await sendUpgradeEmail(user.email, user.name || 'Developer');
+      }
 
       return NextResponse.json({ success: true });
     } else {

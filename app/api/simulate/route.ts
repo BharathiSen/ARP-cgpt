@@ -15,17 +15,7 @@ export async function POST(req: Request) {
     if (authHeader && authHeader.startsWith('Bearer ')) {
       const apiKeyValue = authHeader.substring(7);
       
-      // Check multi-key table
-      const keyObj = await prisma.apiKey.findUnique({ 
-        where: { key: apiKeyValue },
-        include: { user: true }
-      });
-      if (keyObj) {
-        user = keyObj.user;
-      } else {
-        // Fallback to old single-key setup
-        user = await prisma.user.findUnique({ where: { apiKey: apiKeyValue } });
-      }
+      user = await prisma.user.findUnique({ where: { apiKey: apiKeyValue } });
     }
 
     // 2. Fallback to Session Auth if no valid API key found

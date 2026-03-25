@@ -1,4 +1,7 @@
 import prisma from '@/lib/prisma';
+import { generateObject } from 'ai';
+import { openai } from '@ai-sdk/openai';
+import { z } from 'zod';
 
 export async function runRealSimulation(projectId: string, endpoint: string) {
   const startTime = Date.now();
@@ -38,41 +41,48 @@ export async function runRealSimulation(projectId: string, endpoint: string) {
 
   const status = isFailed ? 'FAILED' : 'SUCCESS';
 
-  // --- FEATURE 1: AI FAILURE ANALYSIS ---
-  const insightData = {
+  // --- FEATURE 1: NATIVE GEN AI FAILURE ANALYSIS ---
+  let aiInsights = {
     confidence: 0,
-    rootCause: '',
-    suggestion: '',
+    rootCause: isFailed ? 'Unknown error occurred.' : 'Endpoint successfully reached.',
+    suggestion: isFailed ? 'Check endpoint availability.' : 'No action needed.',
   };
 
-  if (isFailed) {
-    insightData.confidence = Math.floor(Math.random() * (95 - 82 + 1) + 82); // Simulated AI confidence 82-95%
-    if (statusCode === 408) {
-      insightData.rootCause = `Critical Timeout detected (> ${actualLatency}ms). Backend bottleneck under load.`;
-      insightData.suggestion = `Increase API gateway timeouts, vertically scale the database, or introduce async task queues.`;
-    } else if (statusCode === 401 || statusCode === 403) {
-      insightData.rootCause = `Authentication/Authorization logic rejected test agent (HTTP ${statusCode}).`;
-      insightData.suggestion = `Verify JWT expirations, CORS policies, and inject simulation OAuth tokens.`;
-    } else if (statusCode === 429) {
-      insightData.confidence = 98;
-      insightData.rootCause = `Strict Rate limit or WAF active (HTTP 429).`;
-      insightData.suggestion = `Configure a testing bypass rule in Cloudflare/AWS WAF, or apply exponential backoff.`;
-    } else {
-      insightData.rootCause = `Unexpected Internal/Upstream Error (HTTP ${statusCode}).`;
-      insightData.suggestion = `Enable deep tracing for this route and implement circuit breakers for cascading failures.`;
+  if (process.env.OPENAI_API_KEY && endpoint) {
+    try {
+      const { object } = await generateObject({
+        model: openai('gpt-4o-mini'),
+        schema: z.object({
+          confidence: z.number().min(0).max(100).describe('Confidence score of the analysis'),
+          rootCause: z.string().describe('A tech root cause of the status code / latency'),
+          suggestion: z.string().describe('A devops suggestion for the engineer'),
+        }),
+        prompt: `Analyze this API reliability check.
+          Endpoint: ${endpoint}.
+          HTTP Status: ${statusCode}.
+          Latency: ${actualLatency}ms.
+          Is Failed: ${isFailed}.
+          Provide a highly technical root cause string, and an actionable specific codebase/devops suggestion.`
+      });
+      aiInsights = object;
+    } catch (error) {
+      console.error('OpenAI Analysis Failed', error);
+      aiInsights.rootCause = `Fell back: HTTP ${statusCode} after ${actualLatency}ms`;
+      aiInsights.confidence = 85;
     }
   } else {
-    insightData.confidence = Math.floor(Math.random() * (99 - 90 + 1) + 90);
-    if (actualLatency > 800) {
-      insightData.rootCause = `Sub-optimal latency (${actualLatency}ms). Connection established but payload delivery dragged.`;
-      insightData.suggestion = `Cache static properties via Edge CDN, or add a Redis layer for repeated DB scans.`;
+    if (isFailed) {
+      aiInsights.confidence = 90;
+      aiInsights.rootCause = `Error HTTP ${statusCode}`;
+      aiInsights.suggestion = `Check logs and increase tracing on ${endpoint}`;
     } else {
-      insightData.rootCause = `Endpoint is structurally sound and performing at optimal speed (${actualLatency}ms).`;
-      insightData.suggestion = `No immediate architectural changes needed. Maintain current capacity provisioning.`;
+      aiInsights.confidence = 99;
+      aiInsights.rootCause = `Optimal Speed at ${actualLatency}ms`;
+      aiInsights.suggestion = "Endpoint sound. Maintain provisioning.";
     }
   }
 
-  const insight = JSON.stringify(insightData);
+  const insight = JSON.stringify(aiInsights);
 
   const simulation = await prisma.simulation.create({
     data: {
@@ -88,3 +98,4 @@ export async function runRealSimulation(projectId: string, endpoint: string) {
 
   return simulation;
 }
+
