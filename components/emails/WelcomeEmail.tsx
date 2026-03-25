@@ -25,7 +25,7 @@ export const WelcomeEmail = ({ name }: WelcomeEmailProps) => {
         <Container style={container}>
           <Heading style={h1}>Welcome, {name}!</Heading>
           <Text style={text}>
-            We're thrilled to have you here. The AI Reliability Platform helps you 
+            We&apos;re thrilled to have you here. The AI Reliability Platform helps you 
             simulate and mitigate edge cases for your LLM applications.
           </Text>
           <Section style={btnContainer}>

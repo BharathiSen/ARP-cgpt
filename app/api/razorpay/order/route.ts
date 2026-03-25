@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import Razorpay from 'razorpay';
 
-export async function POST(req: Request) {
+export async function POST() {
   try {
     const session = await getServerSession(authOptions);
 
@@ -20,10 +20,12 @@ export async function POST(req: Request) {
       key_secret: process.env.RAZORPAY_KEY_SECRET,
     });
 
+    const userId = (session.user as { id: string }).id;
+
     const options = {
       amount: 49900, // ₹499.00 in paise
       currency: 'INR',
-      receipt: `rcptid_${(session.user as any).id}_${Date.now()}`,
+      receipt: `rcptid_${userId}_${Date.now()}`,
     };
 
     const order = await razorpay.orders.create(options);

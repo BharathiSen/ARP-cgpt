@@ -6,6 +6,18 @@ import bcrypt from 'bcryptjs';
 
 import type { Adapter } from 'next-auth/adapters';
 
+type AppUserClaims = {
+  id: string;
+  isAdmin?: boolean;
+  isPaid?: boolean;
+};
+
+type AppSessionUser = {
+  id?: string;
+  isAdmin?: boolean;
+  isPaid?: boolean;
+};
+
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma) as Adapter,
   session: {
@@ -68,9 +80,10 @@ export const authOptions: NextAuthOptions = {
         token.isPaid = session.isPaid;
       }
       if (user) {
-        token.id = user.id;
-        token.isAdmin = (user as any).isAdmin;
-        token.isPaid = (user as any).isPaid;
+        const appUser = user as typeof user & AppUserClaims;
+        token.id = appUser.id;
+        token.isAdmin = Boolean(appUser.isAdmin);
+        token.isPaid = Boolean(appUser.isPaid);
       } else if (trigger === 'update') {
         const u = await prisma.user.findUnique({ where: { id: token.id as string } });
         if (u) {
@@ -82,9 +95,11 @@ export const authOptions: NextAuthOptions = {
     },
     session: async ({ session, token }) => {
       if (session.user) {
-        (session.user as any).id = token.id as string;
-        (session.user as any).isAdmin = (token as any).isAdmin;
-        (session.user as any).isPaid = (token as any).isPaid;
+        const sessionUser = session.user as typeof session.user & AppSessionUser;
+        const tokenClaims = token as typeof token & { isAdmin?: boolean; isPaid?: boolean };
+        sessionUser.id = token.id as string;
+        sessionUser.isAdmin = Boolean(tokenClaims.isAdmin);
+        sessionUser.isPaid = Boolean(tokenClaims.isPaid);
       }
       return session;
     },

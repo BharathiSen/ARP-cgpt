@@ -28,9 +28,11 @@ export async function POST(req: Request) {
       .digest('hex');
 
     if (expectedSignature === razorpay_signature) {
+      const userId = (session.user as { id: string }).id;
+
       // Signature is valid, grant access
       const user = await prisma.user.update({
-        where: { id: (session.user as any).id },
+        where: { id: userId },
         data: { isPaid: true },
       });
 

@@ -12,12 +12,18 @@ export const sendWelcomeEmail = async (email: string, name: string) => {
   }
 
   try {
-    await resend.emails.send({
+    const { data, error } = await resend.emails.send({
       from: 'Acme <onboarding@resend.dev>', // Update with your verified domain in production
       to: email,
       subject: 'Welcome to AI Reliability Platform',
       react: WelcomeEmail({ name }),
     });
+    
+    if (error) {
+      console.error('Resend API Error (Welcome Email):', error);
+    } else {
+      console.log('Welcome email sent successfully:', data);
+    }
   } catch (error) {
     console.error('Failed to send welcome email:', error);
   }
@@ -30,12 +36,18 @@ export const sendUpgradeEmail = async (email: string, name: string) => {
   }
 
   try {
-    await resend.emails.send({
+    const { data, error } = await resend.emails.send({
       from: 'Acme <upgrade@resend.dev>', // Update with your verified domain in production
       to: email,
       subject: 'Your Account has been Upgraded - PRO Tier',
       react: UpgradeEmail({ name }),
     });
+
+    if (error) {
+      console.error('Resend API Error (Upgrade Email):', error);
+    } else {
+      console.log('Upgrade email sent successfully:', data);
+    }
   } catch (error) {
     console.error('Failed to send upgrade email:', error);
   }

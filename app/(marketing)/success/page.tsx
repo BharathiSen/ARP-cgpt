@@ -8,7 +8,7 @@ import { CheckCircle2, Loader2, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 
 export default function SuccessPage() {
-  const { data: session, status, update } = useSession();
+  const { status, update } = useSession();
   const router = useRouter();
   const [isUpdating, setIsUpdating] = useState(true);
 

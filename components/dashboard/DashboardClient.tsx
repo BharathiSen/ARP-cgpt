@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Play, Activity, Database, CheckCircle, XCircle, LogOut, Loader2, Sparkles, BrainCircuit, Zap, Key, Download } from 'lucide-react';
+import { Plus, Play, Activity, Database, CheckCircle, XCircle, LogOut, Loader2, Sparkles, BrainCircuit, Zap, Key, Download, Eye, EyeOff } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { Button } from '@/components/ui/Button';
 import { toast } from 'react-hot-toast';
@@ -27,6 +27,7 @@ interface Project {
 }
 
 export default function DashboardClient({ user }: { user: { isPaid: boolean, isAdmin: boolean } | null }) {
+  void user;
   const { data: session, status } = useSession();
   const router = useRouter();
   const [projects, setProjects] = useState<Project[]>([]);
@@ -63,9 +64,9 @@ export default function DashboardClient({ user }: { user: { isPaid: boolean, isA
   const [newlyGeneratedKey, setNewlyGeneratedKey] = useState<string | null>(null);
   const [isApiKeyVisible, setIsApiKeyVisible] = useState(false);
 
-  const maskApiKey = (key: string | null) => {
+  const maskApiKey = (key: string) => {
     if (!key) return '';
-    return key.slice(0, 12) + "**************" + key.slice(-6);
+    return key.slice(0, 12) + '**************' + key.slice(-6);
   };
 
   const copyToClipboard = (text: string) => {
@@ -101,8 +102,10 @@ export default function DashboardClient({ user }: { user: { isPaid: boolean, isA
       const res = await fetch('/api/user/generate-api-key', { method: 'POST' });
       const data = await res.json();
       if (res.ok && data.apiKey) {
-        setApiKey(`${data.apiKey.slice(0, 12)} **** ${data.apiKey.slice(-4)}`);
+        setApiKey(data.apiKey);
         setNewlyGeneratedKey(data.apiKey);
+        // Keep the key masked by default after generation.
+        setIsApiKeyVisible(false);
         toast.success('API Key generated successfully!');
 
         // Auto-download file
@@ -144,8 +147,9 @@ export default function DashboardClient({ user }: { user: { isPaid: boolean, isA
       window.URL.revokeObjectURL(url);
       
       toast.success('Report exported successfully!', { id: 'export' });
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to export report.', { id: 'export' });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to export report.';
+      toast.error(message, { id: 'export' });
     }
   };
 
@@ -224,7 +228,7 @@ export default function DashboardClient({ user }: { user: { isPaid: boolean, isA
         fetchProjects();
       }, 500); // short delay to show 100%
       
-    } catch (e: any) {
+    } catch (_e: unknown) {
       clearInterval(interval);
       setIsSimulating(false);
       toast.error('Network error during simulation.');
@@ -394,40 +398,24 @@ export default function DashboardClient({ user }: { user: { isPaid: boolean, isA
               </p>
               
               <div className="space-y-3">
-                {newlyGeneratedKey ? (
+                {apiKey ? (
                   <div className="flex flex-col gap-2">
-                     <p className="text-xs text-yellow-400 mb-1">
-                       Copy and store this key securely. You won&apos;t be able to see it again.
-                     </p>
-                     <div className="p-3 rounded break-all text-xs font-mono" style={{ background: 'rgba(8,18,35,0.6)', border: '1px solid rgba(250,204,21,0.4)', color: '#00C8FF' }}>
-                       {newlyGeneratedKey}
-                     </div>
-                     <div className="flex gap-2">
-                       <Button 
-                         onClick={() => copyToClipboard(newlyGeneratedKey)}
-                         variant="ghost" 
-                         className="flex-1 text-xs py-1.5 border border-[#1e293b]"
-                       >
-                         Copy Key
-                       </Button>
-                       <Button 
-                         onClick={() => setNewlyGeneratedKey(null)}
-                         variant="ghost" 
-                         className="flex-1 text-xs py-1.5"
-                       >
-                         I&apos;ve saved it securely
-                       </Button>
-                     </div>
-                  </div>
-                ) : apiKey ? (
-                  <div className="flex flex-col gap-2">
+                    {newlyGeneratedKey && (
+                      <p className="text-xs text-yellow-400 mb-1">
+                        Copy and store this key securely. You won&apos;t be able to see it again.
+                      </p>
+                    )}
                     <div className="flex items-center justify-between p-3 rounded text-xs font-mono" style={{ background: 'rgba(8,18,35,0.6)', border: '1px solid rgba(0,200,255,0.2)', color: '#00C8FF' }}>
                       <span className="truncate mr-2">{isApiKeyVisible ? apiKey : maskApiKey(apiKey)}</span>
                       <button 
                         onClick={() => setIsApiKeyVisible(!isApiKeyVisible)}
+                        title={isApiKeyVisible ? 'Hide API Key' : 'Show API Key'}
                         className="text-xs text-ds-muted hover:text-white transition-colors flex-shrink-0"
                       >
-                        [{isApiKeyVisible ? 'Hide' : 'Show'}]
+                        <span className="inline-flex items-center gap-1">
+                          {isApiKeyVisible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                          [{isApiKeyVisible ? 'Hide' : 'Show'}]
+                        </span>
                       </button>
                     </div>
                     <div className="flex gap-2">
@@ -438,14 +426,27 @@ export default function DashboardClient({ user }: { user: { isPaid: boolean, isA
                       >
                         Copy
                       </Button>
-                      <Button 
-                        onClick={handleGenerateApiKey} 
-                        isLoading={isApiKeyLoading}
-                        variant="ghost" 
-                        className="flex-1 text-xs py-1.5"
-                      >
-                        Regenerate Key
-                      </Button>
+                      {newlyGeneratedKey ? (
+                        <Button
+                          onClick={() => {
+                            setIsApiKeyVisible(false);
+                            setNewlyGeneratedKey(null);
+                          }}
+                          variant="ghost"
+                          className="flex-1 text-xs py-1.5"
+                        >
+                          I&apos;ve saved it securely
+                        </Button>
+                      ) : (
+                        <Button 
+                          onClick={handleGenerateApiKey} 
+                          isLoading={isApiKeyLoading}
+                          variant="ghost" 
+                          className="flex-1 text-xs py-1.5"
+                        >
+                          Regenerate Key
+                        </Button>
+                      )}
                     </div>
                   </div>
                 ) : (

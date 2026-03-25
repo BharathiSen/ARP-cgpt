@@ -2,6 +2,7 @@
 import prisma from './prisma';
 
 export async function createApiKey(userId: string, keyName?: string) {
+  void keyName;
   const token = crypto.randomBytes(32).toString('hex');
   const key = `arp_${token}`;
   

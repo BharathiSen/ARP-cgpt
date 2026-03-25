@@ -1,7 +1,5 @@
-import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import prisma from '@/lib/prisma';
 import { runRealSimulation } from '@/lib/simulator';
 import { checkRateLimit } from '@/lib/rateLimiter';
 
@@ -25,7 +23,7 @@ export async function GET(req: Request) {
   // Real-time SSE Stream
   const stream = new ReadableStream({
     async start(controller) {
-      const sendEvent = (event: string, data: any) => {
+      const sendEvent = (event: string, data: unknown) => {
         controller.enqueue(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
       };
 
