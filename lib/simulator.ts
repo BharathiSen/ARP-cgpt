@@ -9,18 +9,22 @@ export interface StructuredAIAnalysis {
   confidenceScore: number;
   riskLevel: RiskLevel;
   insights: string[];
-  suggestions: string[];
+  recommendedActions: string[];
+  suggestions?: string[];
   anomalies: string[];
+  reasoning: string;
+  signalsUsed: string[];
   // Backward compatibility fields
-  confidence: number;
-  rootCause: string;
-  suggestion: string;
+  confidence?: number;
+  rootCause?: string;
+  suggestion?: string;
 }
 
 export interface ProjectAISummary {
   overallHealth: string;
   majorRisks: string[];
-  recommendations: string[];
+  recommendedActions: string[];
+  recommendations?: string[];
 }
 
 function clampScore(value: number) {
@@ -38,20 +42,25 @@ function buildLegacyCompatibleAnalysis(base: {
   confidenceScore: number;
   riskLevel: RiskLevel;
   insights: string[];
-  suggestions: string[];
+  recommendedActions?: string[];
+  suggestions?: string[];
   anomalies: string[];
+  reasoning?: string;
+  signalsUsed?: string[];
 }): StructuredAIAnalysis {
   const insights = base.insights.length ? base.insights : ['No significant reliability issues detected.'];
-  const suggestions = base.suggestions.length ? base.suggestions : ['No immediate action required.'];
+  const actionsSource = base.recommendedActions?.length ? base.recommendedActions : (base.suggestions ?? []);
+  const recommendedActions = actionsSource.length
+    ? actionsSource
+    : ['No immediate action required.'];
   return {
     confidenceScore: clampScore(base.confidenceScore),
     riskLevel: base.riskLevel,
     insights,
-    suggestions,
+    recommendedActions,
     anomalies: base.anomalies,
-    confidence: clampScore(base.confidenceScore),
-    rootCause: insights[0],
-    suggestion: suggestions[0],
+    reasoning: base.reasoning ?? 'Analysis generated from latency, status code, failure state, and anomaly heuristics.',
+    signalsUsed: base.signalsUsed ?? ['latency', 'statusCode', 'failureState', 'anomalyPatterns'],
   };
 }
 
@@ -79,8 +88,10 @@ function buildFallbackAnalysis(params: {
     confidenceScore: confidence,
     riskLevel,
     insights: [rootCause],
-    suggestions: [suggestion],
+    recommendedActions: [suggestion],
     anomalies,
+    reasoning: `Fallback reliability reasoning: status=${params.statusCode}, latency=${params.latency}ms, failed=${params.isFailed}.`,
+    signalsUsed: ['latency', 'statusCode', 'failureState', 'anomalyPatterns'],
   });
 }
 
@@ -91,43 +102,73 @@ export async function runRealSimulation(projectId: string, endpoint: string) {
   let statusCode = 0;
   let responseSnippet = '';
   let responseContentType = '';
+  let timeoutType: 'NONE' | 'ABORT_TIMEOUT' | 'NETWORK_ERROR' = 'NONE';
+  let retryAttempts = 0;
+  let responseHeaders: Record<string, string> = {};
 
-  try {
-    const response = await fetch(endpoint, {
-      method: 'GET',
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/json,text/plain',
-      },
-      // Using an AbortController for older Node versions compatibility
-      signal: AbortSignal.timeout ? AbortSignal.timeout(10000) : undefined
-    });
-    
-    // Fallback if AbortSignal.timeout is not available
-    actualLatency = Date.now() - startTime;
-    statusCode = response.status;
-    isFailed = !response.ok;
-    responseContentType = response.headers.get('content-type') || '';
+  const historical = await prisma.simulation.aggregate({
+    where: { projectId, endpoint },
+    _avg: { avgLatency: true },
+  });
+  const historicalAvgLatency = historical._avg.avgLatency ?? 0;
 
-    // Capture a small safe response snippet for anomaly detection context.
+  const maxAttempts = 2;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      const raw = await response.text();
-      responseSnippet = raw.slice(0, 500);
-    } catch {
-      responseSnippet = '';
-    }
+      const response = await fetch(endpoint, {
+        method: 'GET',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/json,text/plain',
+        },
+        signal: AbortSignal.timeout ? AbortSignal.timeout(10000) : undefined,
+      });
 
-    if (actualLatency > 10000) {
+      actualLatency = Date.now() - startTime;
+      statusCode = response.status;
+      isFailed = !response.ok;
+      responseContentType = response.headers.get('content-type') || '';
+      responseHeaders = Object.fromEntries(
+        Array.from(response.headers.entries())
+          .slice(0, 12)
+          .map(([k, v]) => [k, v.slice(0, 200)])
+      );
+
+      try {
+        const raw = await response.text();
+        responseSnippet = raw.slice(0, 500);
+      } catch {
+        responseSnippet = '';
+      }
+
+      if (actualLatency > 10000) {
+        isFailed = true;
+        statusCode = 408;
+        timeoutType = 'ABORT_TIMEOUT';
+      }
+
+      const shouldRetry = isFailed && attempt < maxAttempts && (statusCode >= 500 || statusCode === 408);
+      if (shouldRetry) {
+        retryAttempts += 1;
+        continue;
+      }
+      break;
+    } catch (err: unknown) {
+      actualLatency = Date.now() - startTime;
       isFailed = true;
-      statusCode = 408; // Timeout
-    }
-  } catch (err: unknown) {
-    actualLatency = Date.now() - startTime;
-    isFailed = true;
-    if (err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
-      statusCode = 408;
-    } else {
-      statusCode = 500;
+      if (err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
+        statusCode = 408;
+        timeoutType = 'ABORT_TIMEOUT';
+      } else {
+        statusCode = 500;
+        timeoutType = 'NETWORK_ERROR';
+      }
+
+      if (attempt < maxAttempts) {
+        retryAttempts += 1;
+        continue;
+      }
+      break;
     }
   }
 
@@ -148,8 +189,10 @@ export async function runRealSimulation(projectId: string, endpoint: string) {
           confidenceScore: z.number().min(0).max(100),
           riskLevel: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']),
           insights: z.array(z.string()).min(1),
-          suggestions: z.array(z.string()).min(1),
+          recommendedActions: z.array(z.string()).min(1),
           anomalies: z.array(z.string()),
+          reasoning: z.string().min(1),
+          signalsUsed: z.array(z.string()).min(1),
         }),
         prompt: `Analyze the following API response for reliability.
 
@@ -157,7 +200,7 @@ Return STRICT JSON with:
 - confidenceScore (0-100)
 - riskLevel (LOW/MEDIUM/HIGH/CRITICAL)
 - insights (list of key observations)
-- suggestions (actionable fixes)
+- recommendedActions (actionable fixes)
 - anomalies (unexpected patterns or failures)
 
 Context:
@@ -165,7 +208,11 @@ Context:
 - Status code: ${statusCode}
 - Latency: ${actualLatency}ms
 - Failure state: ${isFailed}
+- Retry attempts: ${retryAttempts}
+- Timeout type: ${timeoutType}
+- Historical average latency: ${historicalAvgLatency.toFixed(2)}ms
 - Response content-type: ${responseContentType || 'unknown'}
+- Response headers: ${JSON.stringify(responseHeaders)}
 - Response snippet: ${responseSnippet || 'N/A'}
 
 Focus on:
@@ -197,11 +244,17 @@ Focus on:
       status,
       avgLatency: actualLatency,
       insight,
-      confidenceScore: aiInsights.confidenceScore,
-      riskLevel: aiInsights.riskLevel,
-      insights: aiInsights.insights,
-      suggestions: aiInsights.suggestions,
-      anomalies: aiInsights.anomalies,
+    },
+    select: {
+      id: true,
+      projectId: true,
+      endpoint: true,
+      failureRate: true,
+      latency: true,
+      status: true,
+      avgLatency: true,
+      insight: true,
+      createdAt: true,
     },
   });
 
@@ -219,7 +272,7 @@ export async function generateProjectReliabilitySummary(simulations: Array<{
     return {
       overallHealth: 'No simulation data available yet.',
       majorRisks: ['Insufficient telemetry to assess reliability risks.'],
-      recommendations: ['Run multiple simulations across peak and off-peak conditions.'],
+      recommendedActions: ['Run multiple simulations across peak and off-peak conditions.'],
     };
   }
 
@@ -238,7 +291,7 @@ export async function generateProjectReliabilitySummary(simulations: Array<{
       `Failure rate over sampled runs: ${failureRate.toFixed(1)}%`,
       `Average latency across sampled runs: ${avgLatency.toFixed(0)}ms`,
     ],
-    recommendations: [
+    recommendedActions: [
       'Introduce latency SLO alerts and endpoint-level tracing.',
       'Apply retry/circuit-breaker patterns on unstable dependencies.',
     ],
@@ -260,20 +313,24 @@ export async function generateProjectReliabilitySummary(simulations: Array<{
       schema: z.object({
         overallHealth: z.string(),
         majorRisks: z.array(z.string()).min(1),
-        recommendations: z.array(z.string()).min(1),
+        recommendedActions: z.array(z.string()).min(1),
       }),
       prompt: `Analyze these API test results and summarize system reliability.
 
 Return STRICT JSON with:
 - overallHealth
 - majorRisks (array)
-- recommendations (array)
+- recommendedActions (array)
 
 Dataset:
 ${JSON.stringify(recent)}`,
     });
 
-    return object;
+    return {
+      overallHealth: object.overallHealth,
+      majorRisks: object.majorRisks,
+      recommendedActions: object.recommendedActions,
+    };
   } catch (error) {
     console.error('Project reliability summary generation failed:', error);
     return fallbackSummary;

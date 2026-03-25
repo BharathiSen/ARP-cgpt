@@ -7,7 +7,7 @@ export default function SolutionSection() {
     { number: '01', title: 'Register API Endpoint', desc: 'Securely connect the endpoint you want to test.' },
     { number: '02', title: 'Configure Reliability Test', desc: 'Set up failure scenarios like latency injection or timeouts.' },
     { number: '03', title: 'Inject Failures', desc: 'Safely execute faults in a controlled environment.' },
-    { number: '04', title: 'Analyze with AI', desc: 'Get automated RCA and suggestions for resilience.' },
+    { number: '04', title: 'Analyze with AI', desc: 'Get automated RCA and recommended actions for resilience.' },
   ];
 
   return (

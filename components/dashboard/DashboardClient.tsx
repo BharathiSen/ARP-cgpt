@@ -20,14 +20,18 @@ interface Simulation {
   confidenceScore?: number;
   riskLevel?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
   insights?: string[];
+  recommendedActions?: string[];
   suggestions?: string[];
   anomalies?: string[];
   ai?: {
     confidenceScore: number;
     riskLevel: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
     insights: string[];
-    suggestions: string[];
+    recommendedActions: string[];
+    suggestions?: string[];
     anomalies: string[];
+    reasoning?: string;
+    signalsUsed?: string[];
     confidence?: number;
     rootCause?: string;
     suggestion?: string;
@@ -38,7 +42,8 @@ interface Simulation {
 interface ProjectSummary {
   overallHealth: string;
   majorRisks: string[];
-  recommendations: string[];
+  recommendedActions: string[];
+  recommendations?: string[];
 }
 
 interface Project {
@@ -107,8 +112,11 @@ export default function DashboardClient({ user }: { user: { isPaid: boolean, isA
           confidenceScore?: number;
           riskLevel?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
           insights?: string[];
+          recommendedActions?: string[];
           suggestions?: string[];
           anomalies?: string[];
+          reasoning?: string;
+          signalsUsed?: string[];
         };
 
         const confidenceScore = Math.round(
@@ -119,8 +127,11 @@ export default function DashboardClient({ user }: { user: { isPaid: boolean, isA
           confidenceScore,
           riskLevel: legacy.riskLevel ?? 'MEDIUM',
           insights: legacy.insights ?? (legacy.rootCause ? [legacy.rootCause] : []),
+          recommendedActions: legacy.recommendedActions ?? legacy.suggestions ?? (legacy.suggestion ? [legacy.suggestion] : []),
           suggestions: legacy.suggestions ?? (legacy.suggestion ? [legacy.suggestion] : []),
           anomalies: legacy.anomalies ?? [],
+          reasoning: legacy.reasoning,
+          signalsUsed: legacy.signalsUsed,
           confidence: legacy.confidence,
           rootCause: legacy.rootCause,
           suggestion: legacy.suggestion,
@@ -130,13 +141,16 @@ export default function DashboardClient({ user }: { user: { isPaid: boolean, isA
       }
     }
 
-    if (sim.insights || sim.suggestions || sim.anomalies) {
+    if (sim.insights || sim.recommendedActions || sim.suggestions || sim.anomalies) {
       return {
         confidenceScore: Math.round(sim.confidenceScore ?? 0),
         riskLevel: sim.riskLevel ?? 'MEDIUM',
         insights: sim.insights ?? [],
+        recommendedActions: sim.recommendedActions ?? sim.suggestions ?? [],
         suggestions: sim.suggestions ?? [],
         anomalies: sim.anomalies ?? [],
+        reasoning: undefined,
+        signalsUsed: undefined,
       };
     }
 
@@ -150,12 +164,55 @@ export default function DashboardClient({ user }: { user: { isPaid: boolean, isA
     return { color: '#ef4444', border: '1px solid rgba(239,68,68,0.4)', background: 'rgba(239,68,68,0.12)' };
   };
 
+  const getActionPriority = (action: string, riskLevel?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL') => {
+    const text = action.toLowerCase();
+    if (text.includes('immediate') || text.includes('critical') || text.includes('urgent') || riskLevel === 'CRITICAL' || riskLevel === 'HIGH') {
+      return 'HIGH';
+    }
+    if (text.includes('monitor') || text.includes('consider') || text.includes('optimize') || riskLevel === 'MEDIUM') {
+      return 'MEDIUM';
+    }
+    return 'LOW';
+  };
+
+  const getPriorityStyle = (priority: 'HIGH' | 'MEDIUM' | 'LOW') => {
+    if (priority === 'HIGH') return { color: '#ff8a8a', borderColor: 'rgba(239,68,68,0.4)', background: 'rgba(239,68,68,0.1)' };
+    if (priority === 'MEDIUM') return { color: '#fbbf24', borderColor: 'rgba(245,158,11,0.4)', background: 'rgba(245,158,11,0.1)' };
+    return { color: '#86e9ff', borderColor: 'rgba(0,200,255,0.35)', background: 'rgba(0,200,255,0.08)' };
+  };
+
+  const readJsonSafe = async (res: Response) => {
+    const text = await res.text();
+    if (!text) return null;
+
+    try {
+      return JSON.parse(text) as unknown;
+    } catch {
+      return null;
+    }
+  };
+
   const fetchProjects = async () => {
-    const res = await fetch('/api/projects');
-    const data = await res.json();
-    if (Array.isArray(data)) {
-      setProjects(data);
-      if (data.length > 0 && !selectedProject) setSelectedProject(data[0]);
+    try {
+      const res = await fetch('/api/projects');
+      const data = await readJsonSafe(res);
+
+      if (!res.ok) {
+        const message =
+          data && typeof data === 'object' && 'error' in data && typeof data.error === 'string'
+            ? data.error
+            : 'Failed to load projects.';
+        toast.error(message);
+        return;
+      }
+
+      if (Array.isArray(data)) {
+        setProjects(data);
+        if (data.length > 0 && !selectedProject) setSelectedProject(data[0]);
+      }
+    } catch (error) {
+      console.error('Failed to fetch projects', error);
+      toast.error('Network error while loading projects.');
     }
   };
 
@@ -255,13 +312,32 @@ export default function DashboardClient({ user }: { user: { isPaid: boolean, isA
     e.preventDefault();
     if (!newProjectName.trim() || isCreating) return;
     setIsCreating(true);
-    const res = await fetch('/api/projects', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: newProjectName }),
-    });
-    if (res.ok) { setNewProjectName(''); fetchProjects(); }
-    setIsCreating(false);
+    try {
+      const res = await fetch('/api/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newProjectName }),
+      });
+      const data = await readJsonSafe(res);
+
+      if (!res.ok) {
+        const message =
+          data && typeof data === 'object' && 'error' in data && typeof data.error === 'string'
+            ? data.error
+            : 'Failed to create project.';
+        toast.error(message);
+        return;
+      }
+
+      setNewProjectName('');
+      await fetchProjects();
+      toast.success('Project created successfully.');
+    } catch (error) {
+      console.error('Failed to create project', error);
+      toast.error('Network error while creating project.');
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   const runSimulation = async () => {
@@ -286,19 +362,29 @@ export default function DashboardClient({ user }: { user: { isPaid: boolean, isA
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ projectId: selectedProject.id, endpoint }),
       });
-      const data = await res.json();
+      const data = await readJsonSafe(res);
       
       clearInterval(interval);
       setSimulationProgress(100);
       
       if (!res.ok) {
-        toast.error(data.message || 'Simulation failed to start');
+        const message =
+          data && typeof data === 'object' && 'message' in data && typeof data.message === 'string'
+            ? data.message
+            : 'Simulation failed to start';
+        const detail =
+          data && typeof data === 'object' && 'detail' in data && typeof data.detail === 'string'
+            ? data.detail
+            : null;
+        toast.error(detail ? `${message} (${detail})` : message);
         setIsSimulating(false);
         return;
       }
       
       setTimeout(() => {
-        setSimulationResult(data);
+        if (data && typeof data === 'object') {
+          setSimulationResult(data as Simulation);
+        }
         setIsSimulating(false);
         toast.success('Simulation completed successfully!');
         fetchProjects();
@@ -337,21 +423,23 @@ export default function DashboardClient({ user }: { user: { isPaid: boolean, isA
   // --- FEATURE 3: AI SUMMARY LOGIC ---
   useEffect(() => {
     if (selectedProject?.simulations && selectedProject.simulations.length > 0) {
+      const projectId = selectedProject.id;
+      const simsSnapshot = selectedProject.simulations ?? [];
       setIsGeneratingSummary(true);
 
       const fetchSummary = async () => {
         try {
-          const res = await fetch(`/api/simulations/summary?projectId=${selectedProject.id}`);
+          const res = await fetch(`/api/simulations/summary?projectId=${projectId}`);
           if (!res.ok) throw new Error('Summary request failed');
           const data = await res.json();
           setAiSummary(data);
         } catch {
-          const sims = selectedProject.simulations ?? [];
+          const sims = simsSnapshot;
           if (!sims.length) {
             setAiSummary({
               overallHealth: 'No simulation data available yet.',
               majorRisks: ['Insufficient telemetry to assess reliability risks.'],
-              recommendations: ['Run multiple simulations to generate reliability insights.'],
+              recommendedActions: ['Run multiple simulations to generate reliability insights.'],
             });
             return;
           }
@@ -370,7 +458,7 @@ export default function DashboardClient({ user }: { user: { isPaid: boolean, isA
               `Failure ratio: ${failurePerc.toFixed(1)}% over ${sims.length} runs`,
               `Average latency: ${avgLat.toFixed(0)}ms`,
             ],
-            recommendations: [
+            recommendedActions: [
               'Enable deeper endpoint-level tracing and alert thresholds.',
               'Run periodic stress tests to detect degradation patterns earlier.',
             ],
@@ -757,28 +845,9 @@ export default function DashboardClient({ user }: { user: { isPaid: boolean, isA
                       transition={{ duration: 0.4 }}
                       className="ds-card p-8 relative overflow-hidden"
                     >
-                      <div className="flex items-start justify-between mb-6">
-                        <div className="flex items-center gap-3">
-                          {simulationResult.status === 'SUCCESS'
-                            ? <CheckCircle className="w-7 h-7" style={{ color: '#00C8FF' }} />
-                            : <XCircle className="w-7 h-7" style={{ color: '#ff4d4d' }} />
-                          }
-                          <div>
-                            <p className="ds-label mb-0">Result</p>
-                            <p className="text-xl font-bold text-white">{simulationResult.status}</p>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="ds-label mb-0">P95 Latency</p>
-                          <p className="text-3xl font-mono font-bold ds-gradient-text">
-                            {simulationResult.avgLatency.toFixed(0)}<span className="text-base text-white/40">ms</span>
-                          </p>
-                        </div>
-                      </div>
-
                       {/* --- FEATURE 1: AI FAILURE ANALYSIS UI --- */}
-                      <div className="flex flex-col gap-2 rounded-xl p-5 text-sm relative overflow-hidden"
-                           style={{ background: 'rgba(0,200,255,0.06)', border: '1px solid rgba(0,200,255,0.3)' }}>
+                      <div className="flex flex-col gap-2 rounded-xl p-5 text-sm relative overflow-hidden mb-6"
+                           style={{ background: 'rgba(0,200,255,0.10)', border: '1px solid rgba(0,200,255,0.45)' }}>
                         {(() => {
                           const aiData = getSimulationAI(simulationResult);
                           if (!aiData) {
@@ -798,11 +867,39 @@ export default function DashboardClient({ user }: { user: { isPaid: boolean, isA
                                     <Sparkles className="w-3 h-3 text-[#00C8FF]" />
                                     <span className="text-[10px] font-mono text-[#00C8FF]">{aiData.confidenceScore}% Confidence</span>
                                   </div>
-                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={riskStyle}>
+                                  <span className="text-xs font-bold px-3 py-1 rounded-full" style={riskStyle}>
                                     {aiData.riskLevel}
                                   </span>
                                 </div>
                               </div>
+
+                              <div className="text-[11px] leading-relaxed px-3 py-2 rounded-lg border mb-2"
+                                   style={{ color: '#9AA6C4', borderColor: 'rgba(255,255,255,0.08)', background: 'rgba(0,0,0,0.25)' }}>
+                                AI analysis based on:
+                                <ul className="mt-1 space-y-0.5">
+                                  <li>- latency trends</li>
+                                  <li>- failure signals</li>
+                                  <li>- anomaly detection</li>
+                                </ul>
+                              </div>
+
+                              {aiData.reasoning ? (
+                                <div className="text-xs leading-relaxed mb-2 px-3 py-2 rounded-lg border"
+                                     style={{ color: '#9AA6C4', borderColor: 'rgba(0,200,255,0.18)', background: 'rgba(0,200,255,0.06)' }}>
+                                  {aiData.reasoning}
+                                </div>
+                              ) : null}
+
+                              {aiData.signalsUsed?.length ? (
+                                <div className="flex flex-wrap gap-2 mb-1">
+                                  {aiData.signalsUsed.map((signal, idx) => (
+                                    <span key={`signal-${idx}`} className="text-[10px] px-2 py-1 rounded-full border"
+                                          style={{ borderColor: 'rgba(0,200,255,0.25)', color: '#86e9ff', background: 'rgba(0,200,255,0.08)' }}>
+                                      {signal}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : null}
 
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-1">
                                 <div className="bg-black/30 p-3 rounded-lg border border-white/5">
@@ -812,9 +909,18 @@ export default function DashboardClient({ user }: { user: { isPaid: boolean, isA
                                   </ul>
                                 </div>
                                 <div className="bg-black/30 p-3 rounded-lg border border-[#00C8FF]/10">
-                                  <span className="text-[10px] text-[#00C8FF] uppercase font-bold tracking-wider mb-1 block">Suggestions</span>
+                                  <span className="text-[10px] text-[#00C8FF] uppercase font-bold tracking-wider mb-1 block">Recommended Actions</span>
                                   <ul className="text-white/90 text-xs leading-relaxed space-y-1">
-                                    {aiData.suggestions.map((item, idx) => <li key={`sug-${idx}`}>- {item}</li>)}
+                                    {aiData.recommendedActions.map((item, idx) => {
+                                      const priority = getActionPriority(item, aiData.riskLevel);
+                                      const priorityStyle = getPriorityStyle(priority);
+                                      return (
+                                        <li key={`act-${idx}`} className="flex items-start justify-between gap-2">
+                                          <span>- {item}</span>
+                                          <span className="text-[10px] px-1.5 py-0.5 rounded border font-semibold" style={priorityStyle}>{priority}</span>
+                                        </li>
+                                      );
+                                    })}
                                   </ul>
                                 </div>
                               </div>
@@ -837,6 +943,25 @@ export default function DashboardClient({ user }: { user: { isPaid: boolean, isA
                         })()}
                       </div>
 
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex items-center gap-3">
+                          {simulationResult.status === 'SUCCESS'
+                            ? <CheckCircle className="w-7 h-7" style={{ color: '#00C8FF' }} />
+                            : <XCircle className="w-7 h-7" style={{ color: '#ff4d4d' }} />
+                          }
+                          <div>
+                            <p className="ds-label mb-0">Result</p>
+                            <p className="text-xl font-bold text-white">{simulationResult.status}</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="ds-label mb-0">P95 Latency</p>
+                          <p className="text-3xl font-mono font-bold ds-gradient-text">
+                            {simulationResult.avgLatency.toFixed(0)}<span className="text-base text-white/40">ms</span>
+                          </p>
+                        </div>
+                      </div>
+
                       {/* decorative glow */}
                       <div className="ds-glow-orb w-48 h-48 -bottom-16 -right-16" style={{ opacity: 0.12 }} />
                     </motion.div>
@@ -850,7 +975,7 @@ export default function DashboardClient({ user }: { user: { isPaid: boolean, isA
                     <div className="ds-card p-6 mb-5" style={{ background: 'linear-gradient(to right, rgba(0,200,255,0.05), rgba(0,0,0,0))' }}>
                       <div className="flex items-center gap-2 mb-3">
                         <Zap className="w-5 h-5 text-[#00C8FF]" />
-                        <h3 className="font-bold text-white text-sm uppercase tracking-widest">AI Portfolio Analysis</h3>
+                        <h3 className="font-bold text-white text-sm uppercase tracking-widest">AI Analysis</h3>
                       </div>
                       {isGeneratingSummary ? (
                         <div className="flex items-center gap-3 text-sm text-[#9AA6C4]">
@@ -858,7 +983,7 @@ export default function DashboardClient({ user }: { user: { isPaid: boolean, isA
                         </div>
                       ) : (
                         <div className="space-y-3 text-sm leading-relaxed text-[#9AA6C4]">
-                          <p>{aiSummary?.overallHealth}</p>
+                          <p>{aiSummary?.overallHealth || 'Summary unavailable right now. Run another simulation to refresh AI analysis.'}</p>
                           {aiSummary?.majorRisks?.length ? (
                             <div>
                               <span className="text-[10px] uppercase tracking-widest font-semibold text-[#ff9b9b]">Major Risks</span>
@@ -867,11 +992,20 @@ export default function DashboardClient({ user }: { user: { isPaid: boolean, isA
                               </ul>
                             </div>
                           ) : null}
-                          {aiSummary?.recommendations?.length ? (
+                          {(aiSummary?.recommendedActions?.length || aiSummary?.recommendations?.length) ? (
                             <div>
-                              <span className="text-[10px] uppercase tracking-widest font-semibold text-[#00C8FF]">Recommendations</span>
+                              <span className="text-[10px] uppercase tracking-widest font-semibold text-[#00C8FF]">Recommended Actions</span>
                               <ul className="mt-1 space-y-1">
-                                {aiSummary.recommendations.map((rec, idx) => <li key={`rec-${idx}`}>- {rec}</li>)}
+                                {(aiSummary.recommendedActions ?? aiSummary.recommendations).map((action, idx) => {
+                                  const priority = getActionPriority(action);
+                                  const priorityStyle = getPriorityStyle(priority);
+                                  return (
+                                    <li key={`rec-${idx}`} className="flex items-start justify-between gap-2">
+                                      <span>- {action}</span>
+                                      <span className="text-[10px] px-1.5 py-0.5 rounded border font-semibold" style={priorityStyle}>{priority}</span>
+                                    </li>
+                                  );
+                                })}
                               </ul>
                             </div>
                           ) : null}

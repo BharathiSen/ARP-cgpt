@@ -14,7 +14,15 @@ export async function getCachedOrFetch<T>(
     const cached = await redisCache.get<T>(key);
     if (cached) {
       console.log(`Redis Cache Hit: ${key}`);
-      return cached;
+      if (typeof cached === 'string') {
+        try {
+          return JSON.parse(cached) as T;
+        } catch {
+          // Fall through to fresh fetch if cache contains invalid legacy payload.
+        }
+      } else {
+        return cached;
+      }
     }
   } catch (err) {
     console.warn('Redis read failed:', err);
@@ -24,7 +32,7 @@ export async function getCachedOrFetch<T>(
 
   try {
     if (redisCache) {
-      await redisCache.setex(key, ttlSeconds, JSON.stringify(data));
+      await redisCache.setex(key, ttlSeconds, data);
     }
   } catch (err) {
     console.warn('Redis write failed:', err);

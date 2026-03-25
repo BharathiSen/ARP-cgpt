@@ -75,8 +75,14 @@ export async function POST(req: Request) {
     });
   } catch (error) {
     console.error('Simulation error:', error);
+    const detail = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { status: 500, errorType: 'internal_error', message: 'Failed to process simulation request.' },
+      {
+        status: 500,
+        errorType: 'internal_error',
+        message: 'Failed to process simulation request.',
+        ...(process.env.NODE_ENV !== 'production' ? { detail } : {}),
+      },
       { status: 500 }
     );
   }

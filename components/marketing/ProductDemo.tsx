@@ -91,7 +91,7 @@ export default function ProductDemo() {
                    </div>
                    <div className="bg-[#00C8FF]/10 p-4 rounded-xl border border-[#00C8FF]/20">
                      <p className="text-[#9AA6C4] text-sm leading-relaxed">
-                       <span className="text-[#00C8FF] font-semibold">Recommendation: </span>
+                      <span className="text-[#00C8FF] font-semibold">Recommended Action: </span>
                        Consider implementing exponential backoff retries and adding circuit breakers to downstream service requests to prevent resource exhaustion.
                      </p>
                    </div>
