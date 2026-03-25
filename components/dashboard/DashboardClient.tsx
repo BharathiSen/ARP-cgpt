@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Play, Activity, Database, CheckCircle, XCircle, LogOut, Loader2, Sparkles, BrainCircuit, Zap, Key, Download, Eye, EyeOff } from 'lucide-react';
+import { Plus, Play, Activity, Database, CheckCircle, XCircle, LogOut, Loader2, Sparkles, Zap, Key, Download, Eye, EyeOff } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { Button } from '@/components/ui/Button';
 import { toast } from 'react-hot-toast';
@@ -474,6 +474,14 @@ export default function DashboardClient({ user }: { user: { isPaid: boolean, isA
     }
   }, [selectedProject?.id, selectedProject?.simulations]);
 
+  const latestProjectSimulation = selectedProject?.simulations?.length
+    ? selectedProject.simulations
+        .slice()
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0]
+    : null;
+  const primarySimulation = simulationResult ?? latestProjectSimulation ?? null;
+  const primaryAIData = primarySimulation ? getSimulationAI(primarySimulation) : null;
+
   const chartData = selectedProject?.simulations?.map((s: Simulation, idx: number) => ({
     name: `Run ${idx + 1}`,
     latency: s.avgLatency,
@@ -845,104 +853,6 @@ export default function DashboardClient({ user }: { user: { isPaid: boolean, isA
                       transition={{ duration: 0.4 }}
                       className="ds-card p-8 relative overflow-hidden"
                     >
-                      {/* --- FEATURE 1: AI FAILURE ANALYSIS UI --- */}
-                      <div className="flex flex-col gap-2 rounded-xl p-5 text-sm relative overflow-hidden mb-6"
-                           style={{ background: 'rgba(0,200,255,0.10)', border: '1px solid rgba(0,200,255,0.45)' }}>
-                        {(() => {
-                          const aiData = getSimulationAI(simulationResult);
-                          if (!aiData) {
-                            return <p className="leading-relaxed" style={{ color: '#9AA6C4' }}>{simulationResult.insight}</p>;
-                          }
-                          const riskStyle = getRiskStyle(aiData.riskLevel);
-
-                          return (
-                            <>
-                              <div className="flex items-center justify-between mb-2">
-                                <div className="flex items-center gap-2">
-                                  <BrainCircuit className="w-5 h-5" style={{ color: '#00C8FF' }} />
-                                  <span className="font-bold text-[#00C8FF] text-xs uppercase tracking-widest">AI Insights</span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-[#00C8FF]/10 border border-[#00C8FF]/20">
-                                    <Sparkles className="w-3 h-3 text-[#00C8FF]" />
-                                    <span className="text-[10px] font-mono text-[#00C8FF]">{aiData.confidenceScore}% Confidence</span>
-                                  </div>
-                                  <span className="text-xs font-bold px-3 py-1 rounded-full" style={riskStyle}>
-                                    {aiData.riskLevel}
-                                  </span>
-                                </div>
-                              </div>
-
-                              <div className="text-[11px] leading-relaxed px-3 py-2 rounded-lg border mb-2"
-                                   style={{ color: '#9AA6C4', borderColor: 'rgba(255,255,255,0.08)', background: 'rgba(0,0,0,0.25)' }}>
-                                AI analysis based on:
-                                <ul className="mt-1 space-y-0.5">
-                                  <li>- latency trends</li>
-                                  <li>- failure signals</li>
-                                  <li>- anomaly detection</li>
-                                </ul>
-                              </div>
-
-                              {aiData.reasoning ? (
-                                <div className="text-xs leading-relaxed mb-2 px-3 py-2 rounded-lg border"
-                                     style={{ color: '#9AA6C4', borderColor: 'rgba(0,200,255,0.18)', background: 'rgba(0,200,255,0.06)' }}>
-                                  {aiData.reasoning}
-                                </div>
-                              ) : null}
-
-                              {aiData.signalsUsed?.length ? (
-                                <div className="flex flex-wrap gap-2 mb-1">
-                                  {aiData.signalsUsed.map((signal, idx) => (
-                                    <span key={`signal-${idx}`} className="text-[10px] px-2 py-1 rounded-full border"
-                                          style={{ borderColor: 'rgba(0,200,255,0.25)', color: '#86e9ff', background: 'rgba(0,200,255,0.08)' }}>
-                                      {signal}
-                                    </span>
-                                  ))}
-                                </div>
-                              ) : null}
-
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-1">
-                                <div className="bg-black/30 p-3 rounded-lg border border-white/5">
-                                  <span className="text-[10px] text-[#ff4d4d] uppercase font-bold tracking-wider mb-1 block">Insights</span>
-                                  <ul className="text-white/90 text-xs leading-relaxed space-y-1">
-                                    {aiData.insights.map((item, idx) => <li key={`ins-${idx}`}>- {item}</li>)}
-                                  </ul>
-                                </div>
-                                <div className="bg-black/30 p-3 rounded-lg border border-[#00C8FF]/10">
-                                  <span className="text-[10px] text-[#00C8FF] uppercase font-bold tracking-wider mb-1 block">Recommended Actions</span>
-                                  <ul className="text-white/90 text-xs leading-relaxed space-y-1">
-                                    {aiData.recommendedActions.map((item, idx) => {
-                                      const priority = getActionPriority(item, aiData.riskLevel);
-                                      const priorityStyle = getPriorityStyle(priority);
-                                      return (
-                                        <li key={`act-${idx}`} className="flex items-start justify-between gap-2">
-                                          <span>- {item}</span>
-                                          <span className="text-[10px] px-1.5 py-0.5 rounded border font-semibold" style={priorityStyle}>{priority}</span>
-                                        </li>
-                                      );
-                                    })}
-                                  </ul>
-                                </div>
-                              </div>
-
-                              {aiData.anomalies.length > 0 && (
-                                <div className="mt-3 flex flex-wrap gap-2">
-                                  {aiData.anomalies.map((anomaly, idx) => (
-                                    <span
-                                      key={`anom-${idx}`}
-                                      className="text-[10px] px-2 py-1 rounded-full border"
-                                      style={{ borderColor: 'rgba(255,77,77,0.35)', color: '#ff9b9b', background: 'rgba(255,77,77,0.08)' }}
-                                    >
-                                      {anomaly}
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
-                            </>
-                          );
-                        })()}
-                      </div>
-
                       <div className="flex items-start justify-between mb-2">
                         <div className="flex items-center gap-3">
                           {simulationResult.status === 'SUCCESS'
@@ -976,6 +886,17 @@ export default function DashboardClient({ user }: { user: { isPaid: boolean, isA
                       <div className="flex items-center gap-2 mb-3">
                         <Zap className="w-5 h-5 text-[#00C8FF]" />
                         <h3 className="font-bold text-white text-sm uppercase tracking-widest">AI Analysis</h3>
+                        {primaryAIData ? (
+                          <div className="ml-auto flex items-center gap-2">
+                            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-[#00C8FF]/10 border border-[#00C8FF]/20">
+                              <Sparkles className="w-3 h-3 text-[#00C8FF]" />
+                              <span className="text-[10px] font-mono text-[#00C8FF]">{primaryAIData.confidenceScore}% Confidence</span>
+                            </div>
+                            <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={getRiskStyle(primaryAIData.riskLevel)}>
+                              {primaryAIData.riskLevel}
+                            </span>
+                          </div>
+                        ) : null}
                       </div>
                       {isGeneratingSummary ? (
                         <div className="flex items-center gap-3 text-sm text-[#9AA6C4]">
@@ -984,6 +905,14 @@ export default function DashboardClient({ user }: { user: { isPaid: boolean, isA
                       ) : (
                         <div className="space-y-3 text-sm leading-relaxed text-[#9AA6C4]">
                           <p>{aiSummary?.overallHealth || 'Summary unavailable right now. Run another simulation to refresh AI analysis.'}</p>
+
+                          {primaryAIData?.reasoning ? (
+                            <div className="text-xs leading-relaxed px-3 py-2 rounded-lg border"
+                                 style={{ color: '#9AA6C4', borderColor: 'rgba(0,200,255,0.18)', background: 'rgba(0,200,255,0.06)' }}>
+                              {primaryAIData.reasoning}
+                            </div>
+                          ) : null}
+
                           {aiSummary?.majorRisks?.length ? (
                             <div>
                               <span className="text-[10px] uppercase tracking-widest font-semibold text-[#ff9b9b]">Major Risks</span>
@@ -992,6 +921,16 @@ export default function DashboardClient({ user }: { user: { isPaid: boolean, isA
                               </ul>
                             </div>
                           ) : null}
+
+                          {primaryAIData?.insights?.length ? (
+                            <div>
+                              <span className="text-[10px] uppercase tracking-widest font-semibold text-[#ff9b9b]">Insights</span>
+                              <ul className="mt-1 space-y-1">
+                                {primaryAIData.insights.map((insight, idx) => <li key={`insight-${idx}`}>- {insight}</li>)}
+                              </ul>
+                            </div>
+                          ) : null}
+
                           {(aiSummary?.recommendedActions?.length || aiSummary?.recommendations?.length) ? (
                             <div>
                               <span className="text-[10px] uppercase tracking-widest font-semibold text-[#00C8FF]">Recommended Actions</span>
@@ -1007,6 +946,23 @@ export default function DashboardClient({ user }: { user: { isPaid: boolean, isA
                                   );
                                 })}
                               </ul>
+                            </div>
+                          ) : null}
+
+                          {primaryAIData?.signalsUsed?.length ? (
+                            <div>
+                              <span className="text-[10px] uppercase tracking-widest font-semibold text-[#86e9ff]">Signals Used</span>
+                              <div className="mt-1 flex flex-wrap gap-2">
+                                {primaryAIData.signalsUsed.map((signal, idx) => (
+                                  <span
+                                    key={`signal-${idx}`}
+                                    className="text-[10px] px-2 py-1 rounded-full border"
+                                    style={{ borderColor: 'rgba(0,200,255,0.25)', color: '#86e9ff', background: 'rgba(0,200,255,0.08)' }}
+                                  >
+                                    {signal}
+                                  </span>
+                                ))}
+                              </div>
                             </div>
                           ) : null}
                         </div>
