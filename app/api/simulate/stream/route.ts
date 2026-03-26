@@ -54,19 +54,24 @@ export async function GET(req: Request) {
       };
 
       try {
-        sendEvent('status', { message: 'Simulation Validated' });
-        
-        // Brief artificial delay for UI realism before hitting real checks
-        await new Promise(r => setTimeout(r, 800));
-        sendEvent('status', { message: 'Connecting to API endpoint...' });
+        sendEvent('status', { message: 'Initializing simulation...' });
+        sendEvent('progress', { progressPercent: 10 });
 
-        // Run the real simulation block natively
+        sendEvent('status', { message: 'Sending request...' });
+
         const simulation = await runRealSimulation(projectId, endpoint);
 
-        // Emit final result
+        sendEvent('latency', { value: Math.round(simulation.avgLatency ?? simulation.latency ?? 0) });
+        sendEvent('progress', { progressPercent: 50 });
+
+        sendEvent('status', { message: 'Analyzing with AI...' });
+        sendEvent('progress', { progressPercent: 80 });
+
+        sendEvent('status', { message: 'Finalizing simulation result...' });
         sendEvent('complete', { simulation });
       } catch (err) {
-        sendEvent('error', { message: 'Simulation failed to stream' });
+        const message = err instanceof Error ? err.message : 'Simulation failed to stream';
+        sendEvent('error', { message });
       } finally {
         controller.close();
       }

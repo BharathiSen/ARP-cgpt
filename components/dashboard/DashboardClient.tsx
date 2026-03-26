@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -16,6 +16,7 @@ interface Simulation {
   endpoint: string;
   status: string;
   avgLatency: number;
+  latency?: number;
   insight?: string;
   confidenceScore?: number;
   riskLevel?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
@@ -79,6 +80,8 @@ export default function DashboardClient({ user }: { user: { isPaid: boolean, isA
   // Real-time animation states
   const [simulationProgress, setSimulationProgress] = useState(0);
   const [liveLatency, setLiveLatency] = useState(0);
+  const [statusMessage, setStatusMessage] = useState('');
+  const eventSourceRef = useRef<EventSource | null>(null);
 
   // --- FEATURE 2: AI TEST GENERATOR STATES ---
   const [aiPrompt, setAiPrompt] = useState('');
@@ -376,60 +379,146 @@ export default function DashboardClient({ user }: { user: { isPaid: boolean, isA
 
   const runSimulation = async () => {
     if (!selectedProject) return;
-    setIsSimulating(true);
-    setSimulationResult(null);
-    setSimulationProgress(0);
-    setLiveLatency(0);
 
-    // Live Progress Animation Interval
-    const interval = setInterval(() => {
-      setSimulationProgress(p => {
-        if (p >= 95) return p;
-        return p + Math.floor(Math.random() * 15);
-      });
-      setLiveLatency(Math.floor(Math.random() * 800) + 50); // random between 50 and 850
-    }, 150);
+    const runSimulationFallback = async () => {
+      try {
+        setStatusMessage('Fallback mode: running standard simulation...');
+        const res = await fetch('/api/simulate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ projectId: selectedProject.id, endpoint }),
+        });
+        const data = await readJsonSafe(res);
 
-    try {
-      const res = await fetch('/api/simulate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectId: selectedProject.id, endpoint }),
-      });
-      const data = await readJsonSafe(res);
-      
-      clearInterval(interval);
-      setSimulationProgress(100);
-      
-      if (!res.ok) {
-        const message =
-          data && typeof data === 'object' && 'message' in data && typeof data.message === 'string'
-            ? data.message
-            : 'Simulation failed to start';
-        const detail =
-          data && typeof data === 'object' && 'detail' in data && typeof data.detail === 'string'
-            ? data.detail
-            : null;
-        toast.error(detail ? `${message} (${detail})` : message);
-        setIsSimulating(false);
-        return;
-      }
-      
-      setTimeout(() => {
+        if (!res.ok) {
+          const message =
+            data && typeof data === 'object' && 'message' in data && typeof data.message === 'string'
+              ? data.message
+              : 'Simulation failed to start';
+          const detail =
+            data && typeof data === 'object' && 'detail' in data && typeof data.detail === 'string'
+              ? data.detail
+              : null;
+          toast.error(detail ? `${message} (${detail})` : message);
+          setIsSimulating(false);
+          return;
+        }
+
+        setSimulationProgress(100);
         if (data && typeof data === 'object') {
           setSimulationResult(data as Simulation);
         }
         setIsSimulating(false);
+        setStatusMessage('Simulation completed.');
         toast.success('Simulation completed successfully!');
         fetchProjects();
-      }, 500); // short delay to show 100%
-      
+      } catch (_e: unknown) {
+        setIsSimulating(false);
+        setStatusMessage('Simulation failed.');
+        toast.error('Network error during simulation.');
+      }
+    };
+
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+    }
+
+    setIsSimulating(true);
+    setSimulationResult(null);
+    setSimulationProgress(0);
+    setLiveLatency(0);
+    setStatusMessage('Initializing simulation...');
+
+    const params = new URLSearchParams({
+      projectId: selectedProject.id,
+      endpoint,
+      failureRate: String(generatedConfig?.failureRate ?? 0),
+      latency: String(generatedConfig?.latencySpikes ?? 0),
+    });
+    const streamUrl = `/api/simulate/stream?${params.toString()}`;
+
+    let completed = false;
+
+    try {
+      const eventSource = new EventSource(streamUrl);
+      eventSourceRef.current = eventSource;
+
+      eventSource.addEventListener('progress', (event) => {
+        try {
+          const payload = JSON.parse((event as MessageEvent).data) as { progressPercent?: number };
+          if (typeof payload.progressPercent === 'number') {
+            setSimulationProgress(payload.progressPercent);
+          }
+        } catch {
+          // Ignore malformed event payloads.
+        }
+      });
+
+      eventSource.addEventListener('latency', (event) => {
+        try {
+          const payload = JSON.parse((event as MessageEvent).data) as { value?: number };
+          if (typeof payload.value === 'number') {
+            setLiveLatency(payload.value);
+          }
+        } catch {
+          // Ignore malformed event payloads.
+        }
+      });
+
+      eventSource.addEventListener('status', (event) => {
+        try {
+          const payload = JSON.parse((event as MessageEvent).data) as { message?: string };
+          if (payload.message) {
+            setStatusMessage(payload.message);
+          }
+        } catch {
+          // Ignore malformed event payloads.
+        }
+      });
+
+      eventSource.addEventListener('complete', (event) => {
+        try {
+          const payload = JSON.parse((event as MessageEvent).data) as { simulation?: Simulation } | Simulation;
+          const simulation = ('simulation' in payload ? payload.simulation : payload) as Simulation;
+          completed = true;
+          setSimulationProgress(100);
+          if (simulation) {
+            setSimulationResult(simulation);
+            setLiveLatency(Math.round(simulation.avgLatency ?? 0));
+          }
+          setStatusMessage('Simulation completed.');
+          eventSource.close();
+          eventSourceRef.current = null;
+          setIsSimulating(false);
+          toast.success('Simulation completed successfully!');
+          fetchProjects();
+        } catch {
+          eventSource.close();
+          eventSourceRef.current = null;
+          runSimulationFallback();
+        }
+      });
+
+      eventSource.addEventListener('error', () => {
+        if (completed) return;
+        eventSource.close();
+        eventSourceRef.current = null;
+        runSimulationFallback();
+      });
     } catch (_e: unknown) {
-      clearInterval(interval);
-      setIsSimulating(false);
-      toast.error('Network error during simulation.');
+      await runSimulationFallback();
     }
   };
+
+  useEffect(() => {
+    return () => {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
+    };
+  }, []);
 
   // --- FEATURE 2: AI TEST GENERATOR LOGIC ---
   const handleAIGenerate = async () => {
@@ -516,10 +605,23 @@ export default function DashboardClient({ user }: { user: { isPaid: boolean, isA
   const primarySimulation = simulationResult ?? latestProjectSimulation ?? null;
   const primaryAIData = primarySimulation ? getSimulationAI(primarySimulation) : null;
 
-  const chartData = selectedProject?.simulations?.map((s: Simulation, idx: number) => ({
-    name: `Run ${idx + 1}`,
-    latency: s.avgLatency,
-  })) || [];
+  const orderedSimulations = selectedProject?.simulations
+    ? selectedProject.simulations
+        .slice()
+        .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+    : [];
+
+  const lastFiveSimulations = orderedSimulations.slice(-5);
+  const startRunNumber = Math.max(1, orderedSimulations.length - lastFiveSimulations.length + 1);
+
+  const chartData = lastFiveSimulations.map((item, index) => ({
+    run: `Run ${startRunNumber + index}`,
+    latency: item.avgLatency ?? item.latency,
+  }));
+
+  const validChartData = chartData.filter(
+    (item) => item.latency !== null && item.latency !== undefined
+  );
 
   const successCount = selectedProject?.simulations?.filter((s: Simulation) => s.status === 'SUCCESS').length || 0;
   const failureCount = selectedProject?.simulations?.filter((s: Simulation) => s.status === 'FAILED').length || 0;
@@ -855,11 +957,11 @@ export default function DashboardClient({ user }: { user: { isPaid: boolean, isA
                         >
                           <div className="flex justify-between items-center text-xs text-[#9AA6C4] font-mono">
                             <span className="flex items-center gap-2">
-                              <Activity className="w-3 h-3 text-[#00C8FF] animate-pulse" />
-                              Pinging {endpoint.substring(0, 25)}...
+                              <Loader2 className="w-3 h-3 text-[#00C8FF] animate-spin" />
+                              {statusMessage || 'Starting simulation...'}
                             </span>
                             <span className={liveLatency > 600 ? 'text-[#ff4d4d]' : 'text-[#00C8FF]'}>
-                              {liveLatency}ms
+                              {liveLatency > 0 ? `${liveLatency}ms` : '--'}
                             </span>
                           </div>
                           <div className="h-1.5 w-full bg-black/50 rounded-full overflow-hidden border border-white/5">
@@ -1033,8 +1135,18 @@ export default function DashboardClient({ user }: { user: { isPaid: boolean, isA
                       <h3 className="font-bold text-white text-sm uppercase tracking-widest mb-4">Latency Trend</h3>
                       <div className="h-48">
                         <ResponsiveContainer width="100%" height="100%">
-                          <LineChart data={chartData}>
-                            <XAxis dataKey="name" stroke="#9AA6C4" fontSize={10} tickLine={false} axisLine={false} />
+                          <LineChart data={validChartData} margin={{ top: 20, right: 30, left: 10, bottom: 10 }}>
+                            <XAxis
+                              dataKey="run"
+                              tick={{ fill: '#94a3b8', fontSize: 12 }}
+                              tickMargin={10}
+                              padding={{ left: 20, right: 20 }}
+                              interval={0}
+                              angle={0}
+                              textAnchor="middle"
+                              tickLine={false}
+                              axisLine={false}
+                            />
                             <YAxis stroke="#9AA6C4" fontSize={10} tickLine={false} axisLine={false} />
                             <Tooltip
                               contentStyle={{ background: '#0F172A', border: '1px solid #1E293B', borderRadius: '8px' }}
