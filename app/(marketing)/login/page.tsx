@@ -46,7 +46,11 @@ export default function LoginPage() {
     setLoading(false);
 
     if (signInRes?.error) {
-      setError("Invalid credentials. Please try again.");
+      if (signInRes.error === "CredentialsSignin") {
+        setError("Invalid credentials. Please try again.");
+      } else {
+        setError(`Sign in failed: ${signInRes.error}`);
+      }
     } else {
       router.push("/dashboard");
     }

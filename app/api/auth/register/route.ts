@@ -45,6 +45,30 @@ export async function POST(req: Request) {
       userId: user.id,
     });
   } catch (err) {
-    return NextResponse.json({ error: "Internal error" }, { status: 500 });
+    console.error("Registration failed:", err);
+
+    if (!process.env.DATABASE_URL) {
+      return NextResponse.json(
+        { error: "Server misconfigured: DATABASE_URL is missing." },
+        { status: 500 },
+      );
+    }
+
+    const prismaCode =
+      typeof err === "object" && err && "code" in err
+        ? String((err as { code?: unknown }).code)
+        : "";
+
+    if (prismaCode === "P1000" || prismaCode === "P1001") {
+      return NextResponse.json(
+        { error: "Database unavailable. Please try again in a moment." },
+        { status: 503 },
+      );
+    }
+
+    return NextResponse.json(
+      { error: "Registration failed. Please try again." },
+      { status: 500 },
+    );
   }
 }
