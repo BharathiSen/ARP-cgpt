@@ -1,8 +1,5 @@
-import * as Sentry from "@sentry/nextjs";
+// Compatibility shim for tools that still look for sentry.client.config.ts.
+// Canonical setup lives in instrumentation-client.ts.
+import './instrumentation-client';
 
-Sentry.init({
-  dsn: process.env.NEXT_PUBLIC_SENTRY_DSN || "https://examplePublicKey@o0.ingest.sentry.io/0",
-
-  tracesSampleRate: 1.0,
-  debug: false,
-});
+export { onRouterTransitionStart } from './instrumentation-client';

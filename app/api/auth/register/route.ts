@@ -6,13 +6,14 @@ import { sendWelcomeEmail } from '@/lib/email';
 export async function POST(req: Request) {
   try {
     const { email, password, name } = await req.json();
+    const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
 
-    if (!email || !password) {
+    if (!normalizedEmail || !password) {
       return NextResponse.json({ error: 'Missing email or password' }, { status: 400 });
     }
 
     const existingUser = await prisma.user.findUnique({
-      where: { email },
+      where: { email: normalizedEmail },
     });
 
     if (existingUser) {
@@ -23,14 +24,14 @@ export async function POST(req: Request) {
 
     const user = await prisma.user.create({
       data: {
-        email,
+        email: normalizedEmail,
         password: hashedPassword,
         name,
       },
     });
 
     // Send Welcome Email asynchronously
-    await sendWelcomeEmail(email, name || 'Developer');
+    await sendWelcomeEmail(normalizedEmail, name || 'Developer');
 
     return NextResponse.json({ message: 'User created successfully', userId: user.id });
   } catch (err) {

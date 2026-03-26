@@ -4,7 +4,11 @@ import { redisClient } from '@/lib/redis';
 
 export async function GET() {
   const telemetry = await getTelemetrySnapshot();
-  const provider = redisClient.provider === 'upstash' ? 'upstash' : 'local';
+  const provider = redisClient.provider === 'none'
+    ? 'none'
+    : redisClient.provider === 'upstash'
+      ? 'upstash'
+      : 'local';
 
   let connected = false;
   let latency = -1;

@@ -2,7 +2,11 @@ import { NextResponse } from 'next/server';
 import { redisClient } from '@/lib/redis';
 
 export async function GET() {
-  const provider = redisClient.provider === 'upstash' ? 'upstash' : 'local';
+  const provider = redisClient.provider === 'none'
+    ? 'none'
+    : redisClient.provider === 'upstash'
+      ? 'upstash'
+      : 'local';
 
   if (!redisClient.isAvailable) {
     return NextResponse.json({
