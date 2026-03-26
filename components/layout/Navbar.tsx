@@ -13,6 +13,7 @@ export default function Navbar() {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [activeSection, setActiveSection] = useState('');
+  const isDashboardRoute = pathname.startsWith('/dashboard');
 
   const links = [
     { name: 'Features', href: 'features' },
@@ -81,7 +82,7 @@ export default function Navbar() {
         </div>
 
         <div className="hidden md:flex items-center gap-4">
-          {session ? (
+          {session && isDashboardRoute ? (
             <>
               <Link href="/dashboard" className={`text-sm font-medium transition-colors hover:text-white ${pathname === '/dashboard' ? 'text-white border-b-2 border-[#00C8FF] pb-1' : ''}`} style={{ color: pathname === '/dashboard' ? '#fff' : '#9AA6C4' }}>
                 Dashboard
@@ -99,8 +100,8 @@ export default function Navbar() {
               <Link href="/login" className="text-sm font-medium transition-colors hover:text-white" style={{ color: '#9AA6C4' }}>
                 Sign In
               </Link>
-              <Button onClick={() => router.push('/dashboard')} className="text-sm px-5 py-2.5">
-                Start Testing
+              <Button onClick={() => router.push('/login')} className="text-sm px-5 py-2.5">
+                Sign Up
               </Button>
             </>
           )}
@@ -129,7 +130,7 @@ export default function Navbar() {
             </button>
           ))}
           <div className="h-px w-full my-2 bg-[rgba(0,200,255,0.1)]" />
-          {session ? (
+          {session && isDashboardRoute ? (
             <>
               <Link href="/dashboard" onClick={() => setIsOpen(false)} className={`text-sm font-medium ${pathname === '/dashboard' ? 'text-white' : 'text-[#9AA6C4]'} hover:text-white`}>
                 Dashboard
@@ -146,8 +147,8 @@ export default function Navbar() {
               <Link href="/login" onClick={() => setIsOpen(false)} className="text-sm font-medium text-[#9AA6C4] hover:text-white">
                 Sign In
               </Link>
-              <Button onClick={() => { setIsOpen(false); router.push('/dashboard'); }} className="w-full text-center py-2.5 mt-2">
-                Start Testing
+              <Button onClick={() => { setIsOpen(false); router.push('/login'); }} className="w-full text-center py-2.5 mt-2">
+                Sign Up
               </Button>
             </>
           )}
