@@ -1,5 +1,5 @@
-import { redisClient } from '@/lib/redis';
-import { incrementMetric } from '@/lib/telemetry';
+import { redisClient } from "@/lib/redis";
+import { incrementMetric } from "@/lib/telemetry";
 
 type LimitResult = {
   success: boolean;
@@ -20,11 +20,14 @@ function computeWindowReset(now: number) {
 
 function buildRateLimitKey(identifier: string, isPaid: boolean, now: number) {
   const window = Math.floor(now / WINDOW_MS);
-  const tier = isPaid ? 'pro' : 'free';
+  const tier = isPaid ? "pro" : "free";
   return `rl:v1:${tier}:${identifier}:${window}`;
 }
 
-function enforceInMemoryLimit(identifier: string, isPaid: boolean): LimitResult {
+function enforceInMemoryLimit(
+  identifier: string,
+  isPaid: boolean,
+): LimitResult {
   const now = Date.now();
   const limit = isPaid ? PRO_LIMIT : FREE_LIMIT;
   const key = buildRateLimitKey(identifier, isPaid, now);
@@ -47,12 +50,20 @@ function enforceInMemoryLimit(identifier: string, isPaid: boolean): LimitResult 
   };
 }
 
-export async function checkRateLimit(identifier: string, isPaid: boolean = false): Promise<LimitResult> {
-  await incrementMetric('rate_limit_requests');
+export async function checkRateLimit(
+  identifier: string,
+  isPaid: boolean = false,
+): Promise<LimitResult> {
+  await incrementMetric("rate_limit_requests");
 
   if (!identifier) {
-    await incrementMetric('rate_limit_blocked');
-    return { success: false, limit: FREE_LIMIT, remaining: 0, reset: Date.now() + WINDOW_MS };
+    await incrementMetric("rate_limit_blocked");
+    return {
+      success: false,
+      limit: FREE_LIMIT,
+      remaining: 0,
+      reset: Date.now() + WINDOW_MS,
+    };
   }
 
   const now = Date.now();
@@ -60,10 +71,10 @@ export async function checkRateLimit(identifier: string, isPaid: boolean = false
   const reset = computeWindowReset(now);
 
   if (!redisClient.isAvailable) {
-    console.warn('Redis unavailable, applying in-memory fallback rate limit');
+    console.warn("Redis unavailable, applying in-memory fallback rate limit");
     const result = enforceInMemoryLimit(identifier, isPaid);
     if (!result.success) {
-      await incrementMetric('rate_limit_blocked');
+      await incrementMetric("rate_limit_blocked");
     }
     return result;
   }
@@ -82,14 +93,14 @@ export async function checkRateLimit(identifier: string, isPaid: boolean = false
       reset,
     };
     if (!result.success) {
-      await incrementMetric('rate_limit_blocked');
+      await incrementMetric("rate_limit_blocked");
     }
     return result;
   } catch (error) {
-    console.error('Rate limiting failed, using in-memory fallback:', error);
+    console.error("Rate limiting failed, using in-memory fallback:", error);
     const result = enforceInMemoryLimit(identifier, isPaid);
     if (!result.success) {
-      await incrementMetric('rate_limit_blocked');
+      await incrementMetric("rate_limit_blocked");
     }
     return result;
   }

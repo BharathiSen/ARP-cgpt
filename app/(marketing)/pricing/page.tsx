@@ -1,18 +1,18 @@
-'use client';
+"use client";
 
-import { useSession } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
-import { Loader2, Lock, CheckCircle2 } from 'lucide-react';
-import { Button } from '@/components/ui/Button';
-import { useState } from 'react';
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
+import { Loader2, Lock, CheckCircle2 } from "lucide-react";
+import { Button } from "@/components/ui/Button";
+import { useState } from "react";
 
 export default function Pricing() {
   const { data: session, status, update } = useSession();
   const router = useRouter();
   const [isUpgrading, setIsUpgrading] = useState(false);
 
-  if (status === 'loading') {
+  if (status === "loading") {
     return (
       <div className="min-h-screen flex items-center justify-center bg-black">
         <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
@@ -22,8 +22,8 @@ export default function Pricing() {
 
   const loadRazorpayScript = () => {
     return new Promise((resolve) => {
-      const script = document.createElement('script');
-      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      const script = document.createElement("script");
+      script.src = "https://checkout.razorpay.com/v1/checkout.js";
       script.onload = () => resolve(true);
       script.onerror = () => resolve(false);
       document.body.appendChild(script);
@@ -35,16 +35,16 @@ export default function Pricing() {
     try {
       const isLoaded = await loadRazorpayScript();
       if (!isLoaded) {
-        console.error('Razorpay SDK failed to load');
+        console.error("Razorpay SDK failed to load");
         setIsUpgrading(false);
         return;
       }
 
-      const orderRes = await fetch('/api/razorpay/order', { method: 'POST' });
+      const orderRes = await fetch("/api/razorpay/order", { method: "POST" });
       const orderData = await orderRes.json();
 
       if (!orderRes.ok || !orderData.id) {
-        console.error('Failed to create Razorpay order');
+        console.error("Failed to create Razorpay order");
         setIsUpgrading(false);
         return;
       }
@@ -53,15 +53,15 @@ export default function Pricing() {
         key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
         amount: orderData.amount,
         currency: orderData.currency,
-        name: 'AI Reliability Lab',
-        description: 'Pro Subscription',
+        name: "AI Reliability Lab",
+        description: "Pro Subscription",
         order_id: orderData.id,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         handler: async function (response: any) {
           try {
-            const verifyRes = await fetch('/api/razorpay/verify', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+            const verifyRes = await fetch("/api/razorpay/verify", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 razorpay_payment_id: response.razorpay_payment_id,
                 razorpay_order_id: response.razorpay_order_id,
@@ -71,28 +71,28 @@ export default function Pricing() {
 
             if (verifyRes.ok) {
               await update(); // refresh session
-              router.push('/success');
+              router.push("/success");
             } else {
-              console.error('Payment verification failed');
+              console.error("Payment verification failed");
             }
           } catch (err) {
-            console.error('Error during verification:', err);
+            console.error("Error during verification:", err);
           }
         },
         prefill: {
-          name: session?.user?.name || '',
-          email: session?.user?.email || '',
+          name: session?.user?.name || "",
+          email: session?.user?.email || "",
         },
         theme: {
-          color: '#3B82F6',
+          color: "#3B82F6",
         },
       };
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const rzp = new (window as any).Razorpay(options);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      rzp.on('payment.failed', function (response: any) {
-        console.error('Payment Failed:', response.error);
+      rzp.on("payment.failed", function (response: any) {
+        console.error("Payment Failed:", response.error);
       });
       rzp.open();
     } catch (e) {
@@ -104,7 +104,7 @@ export default function Pricing() {
 
   return (
     <div className="min-h-screen bg-black text-white flex items-center justify-center px-4">
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         className="max-w-md w-full bg-zinc-900 border border-zinc-800 rounded-2xl p-8"
@@ -115,9 +115,12 @@ export default function Pricing() {
           </div>
         </div>
 
-        <h1 className="text-2xl font-bold text-center mb-2">Restricted Access</h1>
+        <h1 className="text-2xl font-bold text-center mb-2">
+          Restricted Access
+        </h1>
         <p className="text-zinc-400 text-center mb-8">
-          You need an active subscription to access the dashboard and core features of the AI Reliability Lab.
+          You need an active subscription to access the dashboard and core
+          features of the AI Reliability Lab.
         </p>
 
         <div className="space-y-4 mb-8">
@@ -135,15 +138,15 @@ export default function Pricing() {
           </div>
         </div>
 
-        <Button 
-          onClick={handleUpgrade} 
+        <Button
+          onClick={handleUpgrade}
           disabled={isUpgrading}
           className="w-full h-12 text-lg font-medium"
         >
           {isUpgrading ? (
             <Loader2 className="w-5 h-5 animate-spin mr-2 inline" />
           ) : null}
-          {isUpgrading ? 'Upgrading...' : 'Upgrade Now'}
+          {isUpgrading ? "Upgrading..." : "Upgrade Now"}
         </Button>
       </motion.div>
     </div>

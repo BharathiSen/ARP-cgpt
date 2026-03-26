@@ -1,11 +1,11 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-import { useSession } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
-import { CheckCircle2, Loader2, ArrowRight } from 'lucide-react';
-import { Button } from '@/components/ui/Button';
+import { useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
+import { CheckCircle2, Loader2, ArrowRight } from "lucide-react";
+import { Button } from "@/components/ui/Button";
 
 export default function SuccessPage() {
   const { status, update } = useSession();
@@ -13,12 +13,12 @@ export default function SuccessPage() {
   const [isUpdating, setIsUpdating] = useState(true);
 
   useEffect(() => {
-    if (status === 'unauthenticated') {
-      router.push('/login');
+    if (status === "unauthenticated") {
+      router.push("/login");
       return;
     }
 
-    if (status === 'authenticated') {
+    if (status === "authenticated") {
       const refreshSession = async () => {
         await update();
         setIsUpdating(false);
@@ -29,7 +29,7 @@ export default function SuccessPage() {
 
   return (
     <div className="min-h-screen bg-black text-white flex items-center justify-center px-4">
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         className="max-w-md w-full bg-zinc-900 border border-zinc-800 rounded-2xl p-8 text-center"
@@ -42,18 +42,19 @@ export default function SuccessPage() {
 
         <h1 className="text-2xl font-bold mb-4">Payment Successful!</h1>
         <p className="text-zinc-400 mb-8">
-          Thank you for upgrading to AI Reliability Lab Pro. Your account has been upgraded and you now have full access.
+          Thank you for upgrading to AI Reliability Lab Pro. Your account has
+          been upgraded and you now have full access.
         </p>
 
-        <Button 
-          onClick={() => router.push('/dashboard')} 
+        <Button
+          onClick={() => router.push("/dashboard")}
           disabled={isUpdating}
           className="w-full h-12 text-lg font-medium"
         >
           {isUpdating ? (
             <Loader2 className="w-5 h-5 animate-spin mr-2 inline" />
           ) : null}
-          {isUpdating ? 'Unlocking your account...' : 'Go to Dashboard'}
+          {isUpdating ? "Unlocking your account..." : "Go to Dashboard"}
           {!isUpdating && <ArrowRight className="w-5 h-5 ml-2 inline" />}
         </Button>
       </motion.div>

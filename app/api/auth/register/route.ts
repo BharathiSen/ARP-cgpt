@@ -1,15 +1,19 @@
-import { NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
-import bcrypt from 'bcryptjs';
-import { sendWelcomeEmail } from '@/lib/email';
+import { NextResponse } from "next/server";
+import prisma from "@/lib/prisma";
+import bcrypt from "bcryptjs";
+import { sendWelcomeEmail } from "@/lib/email";
 
 export async function POST(req: Request) {
   try {
     const { email, password, name } = await req.json();
-    const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+    const normalizedEmail =
+      typeof email === "string" ? email.trim().toLowerCase() : "";
 
     if (!normalizedEmail || !password) {
-      return NextResponse.json({ error: 'Missing email or password' }, { status: 400 });
+      return NextResponse.json(
+        { error: "Missing email or password" },
+        { status: 400 },
+      );
     }
 
     const existingUser = await prisma.user.findUnique({
@@ -17,7 +21,10 @@ export async function POST(req: Request) {
     });
 
     if (existingUser) {
-      return NextResponse.json({ error: 'User already exists' }, { status: 400 });
+      return NextResponse.json(
+        { error: "User already exists" },
+        { status: 400 },
+      );
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -31,10 +38,13 @@ export async function POST(req: Request) {
     });
 
     // Send Welcome Email asynchronously
-    await sendWelcomeEmail(normalizedEmail, name || 'Developer');
+    await sendWelcomeEmail(normalizedEmail, name || "Developer");
 
-    return NextResponse.json({ message: 'User created successfully', userId: user.id });
+    return NextResponse.json({
+      message: "User created successfully",
+      userId: user.id,
+    });
   } catch (err) {
-    return NextResponse.json({ error: 'Internal error' }, { status: 500 });
+    return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }

@@ -1,11 +1,11 @@
-'use client';
+"use client";
 
-import React from 'react';
-import Link from 'next/link';
-import { Loader2 } from 'lucide-react';
+import React from "react";
+import Link from "next/link";
+import { Loader2 } from "lucide-react";
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'ghost' | 'custom';
+  variant?: "primary" | "ghost" | "custom";
   isLoading?: boolean;
   href?: string;
   className?: string;
@@ -13,22 +13,23 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 export function Button({
-  variant = 'primary',
+  variant = "primary",
   isLoading = false,
   href,
-  className = '',
+  className = "",
   children,
   ...props
 }: ButtonProps) {
-  let baseClass = '';
+  let baseClass = "";
 
-  if (variant === 'primary') {
-    baseClass = 'ds-btn-primary';
-  } else if (variant === 'ghost') {
-    baseClass = 'ds-btn-ghost';
+  if (variant === "primary") {
+    baseClass = "ds-btn-primary";
+  } else if (variant === "ghost") {
+    baseClass = "ds-btn-ghost";
   }
 
-  const combinedClassName = `${baseClass} ${className} flex justify-center items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed`.trim();
+  const combinedClassName =
+    `${baseClass} ${className} flex justify-center items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed`.trim();
 
   if (href) {
     return (

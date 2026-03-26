@@ -1,12 +1,16 @@
-import { redisClient } from '@/lib/redis';
+import { redisClient } from "@/lib/redis";
 
-type MetricName = 'cache_hits' | 'cache_misses' | 'rate_limit_requests' | 'rate_limit_blocked';
+type MetricName =
+  | "cache_hits"
+  | "cache_misses"
+  | "rate_limit_requests"
+  | "rate_limit_blocked";
 
 const metricKeys: Record<MetricName, string> = {
-  cache_hits: 'telemetry:v1:cache_hits',
-  cache_misses: 'telemetry:v1:cache_misses',
-  rate_limit_requests: 'telemetry:v1:rate_limit_requests',
-  rate_limit_blocked: 'telemetry:v1:rate_limit_blocked',
+  cache_hits: "telemetry:v1:cache_hits",
+  cache_misses: "telemetry:v1:cache_misses",
+  rate_limit_requests: "telemetry:v1:rate_limit_requests",
+  rate_limit_blocked: "telemetry:v1:rate_limit_blocked",
 };
 
 const memoryCounters: Record<MetricName, number> = {
@@ -16,7 +20,10 @@ const memoryCounters: Record<MetricName, number> = {
   rate_limit_blocked: 0,
 };
 
-export async function incrementMetric(metric: MetricName, amount: number = 1): Promise<void> {
+export async function incrementMetric(
+  metric: MetricName,
+  amount: number = 1,
+): Promise<void> {
   if (!Number.isFinite(amount) || amount <= 0) return;
 
   if (!redisClient.isAvailable) {
@@ -42,7 +49,7 @@ export async function getMetric(metric: MetricName): Promise<number> {
   try {
     const value = await redisClient.get<string | number>(metricKeys[metric]);
     if (value === null || value === undefined) return memoryCounters[metric];
-    if (typeof value === 'number') return value;
+    if (typeof value === "number") return value;
 
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : memoryCounters[metric];
@@ -52,15 +59,19 @@ export async function getMetric(metric: MetricName): Promise<number> {
 }
 
 export async function getTelemetrySnapshot() {
-  const [cacheHits, cacheMisses, rateLimitRequests, rateLimitBlocked] = await Promise.all([
-    getMetric('cache_hits'),
-    getMetric('cache_misses'),
-    getMetric('rate_limit_requests'),
-    getMetric('rate_limit_blocked'),
-  ]);
+  const [cacheHits, cacheMisses, rateLimitRequests, rateLimitBlocked] =
+    await Promise.all([
+      getMetric("cache_hits"),
+      getMetric("cache_misses"),
+      getMetric("rate_limit_requests"),
+      getMetric("rate_limit_blocked"),
+    ]);
 
   const totalCacheLookups = cacheHits + cacheMisses;
-  const cacheHitRate = totalCacheLookups > 0 ? Number(((cacheHits / totalCacheLookups) * 100).toFixed(2)) : 0;
+  const cacheHitRate =
+    totalCacheLookups > 0
+      ? Number(((cacheHits / totalCacheLookups) * 100).toFixed(2))
+      : 0;
 
   return {
     cache_hits: cacheHits,

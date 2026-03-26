@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Shield, CheckCircle, Loader2, X, Lock } from 'lucide-react';
-import { Button } from '@/components/ui/Button';
+import { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Shield, CheckCircle, Loader2, X, Lock } from "lucide-react";
+import { Button } from "@/components/ui/Button";
 
 export interface FakePaymentModalProps {
   isOpen: boolean;
@@ -17,7 +17,11 @@ const PAYMENT_STEPS = [
   "Verifying payment...",
 ];
 
-export function FakePaymentModal({ isOpen, onClose, onSuccess }: FakePaymentModalProps) {
+export function FakePaymentModal({
+  isOpen,
+  onClose,
+  onSuccess,
+}: FakePaymentModalProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
   const [isSuccess, setIsSuccess] = useState(false);
@@ -32,23 +36,23 @@ export function FakePaymentModal({ isOpen, onClose, onSuccess }: FakePaymentModa
 
   const handlePay = async () => {
     setIsProcessing(true);
-    
+
     // Step 1
     setStepIndex(0);
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+
     // Step 2
     setStepIndex(1);
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+
     // Step 3
     setStepIndex(2);
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    await new Promise((resolve) => setTimeout(resolve, 1500));
 
     // Success
     setIsSuccess(true);
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+
     onSuccess();
     onClose();
   };
@@ -65,7 +69,7 @@ export function FakePaymentModal({ isOpen, onClose, onSuccess }: FakePaymentModa
           >
             {/* Close Button */}
             {!isProcessing && !isSuccess && (
-              <button 
+              <button
                 onClick={onClose}
                 className="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors"
               >
@@ -80,9 +84,14 @@ export function FakePaymentModal({ isOpen, onClose, onSuccess }: FakePaymentModa
                     <div className="w-16 h-16 bg-[#00C8FF]/10 rounded-full flex items-center justify-center mx-auto mb-4">
                       <Lock className="w-8 h-8 text-[#00C8FF]" />
                     </div>
-                    <h2 className="text-2xl font-bold text-white mb-2">Pro Plan</h2>
+                    <h2 className="text-2xl font-bold text-white mb-2">
+                      Pro Plan
+                    </h2>
                     <div className="text-3xl font-bold text-[#00C8FF]">
-                      ₹499<span className="text-lg text-gray-400 font-normal">/mo</span>
+                      ₹499
+                      <span className="text-lg text-gray-400 font-normal">
+                        /mo
+                      </span>
                     </div>
                   </div>
 
@@ -101,20 +110,20 @@ export function FakePaymentModal({ isOpen, onClose, onSuccess }: FakePaymentModa
                     </div>
                   </div>
 
-                  <Button 
+                  <Button
                     onClick={handlePay}
                     className="w-full py-4 text-lg font-bold bg-gradient-to-r from-[var(--neon-blue)] to-blue-500 hover:opacity-90 rounded-xl"
                   >
                     Pay Securely
                   </Button>
-                  
+
                   <div className="mt-4 flex items-center justify-center gap-2 text-xs text-gray-500">
                     <Shield className="w-4 h-4" />
                     <span>Secure payment (Demo Mode)</span>
                   </div>
                 </>
               ) : isSuccess ? (
-                <motion.div 
+                <motion.div
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
                   className="py-12 text-center"
@@ -122,8 +131,12 @@ export function FakePaymentModal({ isOpen, onClose, onSuccess }: FakePaymentModa
                   <div className="w-20 h-20 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
                     <CheckCircle className="w-10 h-10 text-green-500" />
                   </div>
-                  <h2 className="text-2xl font-bold text-white mb-2">✅ Payment Successful</h2>
-                  <p className="text-gray-400">Welcome to Pro 🎉 Redirecting to dashboard...</p>
+                  <h2 className="text-2xl font-bold text-white mb-2">
+                    ✅ Payment Successful
+                  </h2>
+                  <p className="text-gray-400">
+                    Welcome to Pro 🎉 Redirecting to dashboard...
+                  </p>
                 </motion.div>
               ) : (
                 <div className="py-12 text-center">
@@ -139,11 +152,13 @@ export function FakePaymentModal({ isOpen, onClose, onSuccess }: FakePaymentModa
                       {PAYMENT_STEPS[stepIndex]}
                     </p>
                   </motion.div>
-                  <p className="text-sm text-gray-500 mt-4">Please do not close this window</p>
+                  <p className="text-sm text-gray-500 mt-4">
+                    Please do not close this window
+                  </p>
                 </div>
               )}
             </div>
-            
+
             {/* Top gradient glow */}
             <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-[#00C8FF] to-transparent opacity-50" />
           </motion.div>

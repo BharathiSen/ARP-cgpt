@@ -16,10 +16,8 @@ export default async function Dashboard() {
   // 2. Fetch from DB (IMPORTANT)
   const user = await prisma.user.findUnique({
     where: { email: session.user.email },
-    select: { isPaid: true, isAdmin: true }
+    select: { isPaid: true, isAdmin: true },
   });
-
-  console.log("USER FROM DB:", user);
 
   // 3. Access control
   if (!user?.isPaid && !user?.isAdmin) {

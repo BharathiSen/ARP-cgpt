@@ -1,14 +1,15 @@
-import { NextResponse } from 'next/server';
-import { getTelemetrySnapshot } from '@/lib/telemetry';
-import { redisClient } from '@/lib/redis';
+import { NextResponse } from "next/server";
+import { getTelemetrySnapshot } from "@/lib/telemetry";
+import { redisClient } from "@/lib/redis";
 
 export async function GET() {
   const telemetry = await getTelemetrySnapshot();
-  const provider = redisClient.provider === 'none'
-    ? 'none'
-    : redisClient.provider === 'upstash'
-      ? 'upstash'
-      : 'local';
+  const provider =
+    redisClient.provider === "none"
+      ? "none"
+      : redisClient.provider === "upstash"
+        ? "upstash"
+        : "local";
 
   let connected = false;
   let latency = -1;
@@ -16,7 +17,7 @@ export async function GET() {
   if (redisClient.isAvailable) {
     const startedAt = Date.now();
     try {
-      await redisClient.get('__redis_health_probe__');
+      await redisClient.get("__redis_health_probe__");
       connected = true;
       latency = Date.now() - startedAt;
     } catch {

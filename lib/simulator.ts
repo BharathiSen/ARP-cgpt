@@ -1,9 +1,9 @@
-import prisma from '@/lib/prisma';
-import { generateObject } from 'ai';
-import { openai } from '@ai-sdk/openai';
-import { z } from 'zod';
+import prisma from "@/lib/prisma";
+import { generateObject } from "ai";
+import { openai } from "@ai-sdk/openai";
+import { z } from "zod";
 
-type RiskLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+type RiskLevel = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 
 export interface StructuredAIAnalysis {
   confidenceScore: number;
@@ -31,11 +31,15 @@ function clampScore(value: number) {
   return Math.max(0, Math.min(100, Math.round(value)));
 }
 
-function deriveRiskLevel(isFailed: boolean, statusCode: number, latency: number): RiskLevel {
-  if (isFailed && (statusCode >= 500 || statusCode === 408)) return 'CRITICAL';
-  if (isFailed || latency > 1200) return 'HIGH';
-  if (latency > 600 || statusCode >= 400) return 'MEDIUM';
-  return 'LOW';
+function deriveRiskLevel(
+  isFailed: boolean,
+  statusCode: number,
+  latency: number,
+): RiskLevel {
+  if (isFailed && (statusCode >= 500 || statusCode === 408)) return "CRITICAL";
+  if (isFailed || latency > 1200) return "HIGH";
+  if (latency > 600 || statusCode >= 400) return "MEDIUM";
+  return "LOW";
 }
 
 function buildLegacyCompatibleAnalysis(base: {
@@ -48,19 +52,30 @@ function buildLegacyCompatibleAnalysis(base: {
   reasoning?: string;
   signalsUsed?: string[];
 }): StructuredAIAnalysis {
-  const insights = base.insights.length ? base.insights : ['No significant reliability issues detected.'];
-  const actionsSource = base.recommendedActions?.length ? base.recommendedActions : (base.suggestions ?? []);
+  const insights = base.insights.length
+    ? base.insights
+    : ["No significant reliability issues detected."];
+  const actionsSource = base.recommendedActions?.length
+    ? base.recommendedActions
+    : (base.suggestions ?? []);
   const recommendedActions = actionsSource.length
     ? actionsSource
-    : ['No immediate action required.'];
+    : ["No immediate action required."];
   return {
     confidenceScore: clampScore(base.confidenceScore),
     riskLevel: base.riskLevel,
     insights,
     recommendedActions,
     anomalies: base.anomalies,
-    reasoning: base.reasoning ?? 'Analysis generated from latency, status code, failure state, and anomaly heuristics.',
-    signalsUsed: base.signalsUsed ?? ['latency', 'statusCode', 'failureState', 'anomalyPatterns'],
+    reasoning:
+      base.reasoning ??
+      "Analysis generated from latency, status code, failure state, and anomaly heuristics.",
+    signalsUsed: base.signalsUsed ?? [
+      "latency",
+      "statusCode",
+      "failureState",
+      "anomalyPatterns",
+    ],
   };
 }
 
@@ -70,19 +85,26 @@ function buildFallbackAnalysis(params: {
   latency: number;
   endpoint: string;
 }): StructuredAIAnalysis {
-  const riskLevel = deriveRiskLevel(params.isFailed, params.statusCode, params.latency);
+  const riskLevel = deriveRiskLevel(
+    params.isFailed,
+    params.statusCode,
+    params.latency,
+  );
   const confidence = params.isFailed ? 90 : 98;
   const rootCause = params.isFailed
     ? `Endpoint returned HTTP ${params.statusCode} with ${params.latency}ms latency.`
     : `Endpoint responded successfully in ${params.latency}ms.`;
   const suggestion = params.isFailed
     ? `Inspect upstream logs, add retries, and improve tracing for ${params.endpoint}.`
-    : 'Maintain current performance posture and keep latency monitoring in place.';
+    : "Maintain current performance posture and keep latency monitoring in place.";
 
   const anomalies: string[] = [];
-  if (params.latency > 1000) anomalies.push(`High latency anomaly: ${params.latency}ms`);
-  if (params.statusCode >= 500) anomalies.push(`Server-side failure pattern: HTTP ${params.statusCode}`);
-  if (params.statusCode === 408) anomalies.push('Request timeout anomaly detected');
+  if (params.latency > 1000)
+    anomalies.push(`High latency anomaly: ${params.latency}ms`);
+  if (params.statusCode >= 500)
+    anomalies.push(`Server-side failure pattern: HTTP ${params.statusCode}`);
+  if (params.statusCode === 408)
+    anomalies.push("Request timeout anomaly detected");
 
   return buildLegacyCompatibleAnalysis({
     confidenceScore: confidence,
@@ -91,7 +113,7 @@ function buildFallbackAnalysis(params: {
     recommendedActions: [suggestion],
     anomalies,
     reasoning: `Fallback reliability reasoning: status=${params.statusCode}, latency=${params.latency}ms, failed=${params.isFailed}.`,
-    signalsUsed: ['latency', 'statusCode', 'failureState', 'anomalyPatterns'],
+    signalsUsed: ["latency", "statusCode", "failureState", "anomalyPatterns"],
   });
 }
 
@@ -100,9 +122,9 @@ export async function runRealSimulation(projectId: string, endpoint: string) {
   let isFailed = false;
   let actualLatency = 0;
   let statusCode = 0;
-  let responseSnippet = '';
-  let responseContentType = '';
-  let timeoutType: 'NONE' | 'ABORT_TIMEOUT' | 'NETWORK_ERROR' = 'NONE';
+  let responseSnippet = "";
+  let responseContentType = "";
+  let timeoutType: "NONE" | "ABORT_TIMEOUT" | "NETWORK_ERROR" = "NONE";
   let retryAttempts = 0;
   let responseHeaders: Record<string, string> = {};
 
@@ -116,10 +138,11 @@ export async function runRealSimulation(projectId: string, endpoint: string) {
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       const response = await fetch(endpoint, {
-        method: 'GET',
+        method: "GET",
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/json,text/plain',
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          Accept: "text/html,application/xhtml+xml,application/json,text/plain",
         },
         signal: AbortSignal.timeout ? AbortSignal.timeout(10000) : undefined,
       });
@@ -127,27 +150,30 @@ export async function runRealSimulation(projectId: string, endpoint: string) {
       actualLatency = Date.now() - startTime;
       statusCode = response.status;
       isFailed = !response.ok;
-      responseContentType = response.headers.get('content-type') || '';
+      responseContentType = response.headers.get("content-type") || "";
       responseHeaders = Object.fromEntries(
         Array.from(response.headers.entries())
           .slice(0, 12)
-          .map(([k, v]) => [k, v.slice(0, 200)])
+          .map(([k, v]) => [k, v.slice(0, 200)]),
       );
 
       try {
         const raw = await response.text();
         responseSnippet = raw.slice(0, 500);
       } catch {
-        responseSnippet = '';
+        responseSnippet = "";
       }
 
       if (actualLatency > 10000) {
         isFailed = true;
         statusCode = 408;
-        timeoutType = 'ABORT_TIMEOUT';
+        timeoutType = "ABORT_TIMEOUT";
       }
 
-      const shouldRetry = isFailed && attempt < maxAttempts && (statusCode >= 500 || statusCode === 408);
+      const shouldRetry =
+        isFailed &&
+        attempt < maxAttempts &&
+        (statusCode >= 500 || statusCode === 408);
       if (shouldRetry) {
         retryAttempts += 1;
         continue;
@@ -156,12 +182,15 @@ export async function runRealSimulation(projectId: string, endpoint: string) {
     } catch (err: unknown) {
       actualLatency = Date.now() - startTime;
       isFailed = true;
-      if (err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
+      if (
+        err instanceof Error &&
+        (err.name === "TimeoutError" || err.name === "AbortError")
+      ) {
         statusCode = 408;
-        timeoutType = 'ABORT_TIMEOUT';
+        timeoutType = "ABORT_TIMEOUT";
       } else {
         statusCode = 500;
-        timeoutType = 'NETWORK_ERROR';
+        timeoutType = "NETWORK_ERROR";
       }
 
       if (attempt < maxAttempts) {
@@ -172,7 +201,7 @@ export async function runRealSimulation(projectId: string, endpoint: string) {
     }
   }
 
-  const status = isFailed ? 'FAILED' : 'SUCCESS';
+  const status = isFailed ? "FAILED" : "SUCCESS";
 
   let aiInsights = buildFallbackAnalysis({
     isFailed,
@@ -184,10 +213,10 @@ export async function runRealSimulation(projectId: string, endpoint: string) {
   if (process.env.OPENAI_API_KEY && endpoint) {
     try {
       const { object } = await generateObject({
-        model: openai('gpt-4o-mini'),
+        model: openai("gpt-4o-mini"),
         schema: z.object({
           confidenceScore: z.number().min(0).max(100),
-          riskLevel: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']),
+          riskLevel: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]),
           insights: z.array(z.string()).min(1),
           recommendedActions: z.array(z.string()).min(1),
           anomalies: z.array(z.string()),
@@ -211,9 +240,9 @@ Context:
 - Retry attempts: ${retryAttempts}
 - Timeout type: ${timeoutType}
 - Historical average latency: ${historicalAvgLatency.toFixed(2)}ms
-- Response content-type: ${responseContentType || 'unknown'}
+- Response content-type: ${responseContentType || "unknown"}
 - Response headers: ${JSON.stringify(responseHeaders)}
-- Response snippet: ${responseSnippet || 'N/A'}
+- Response snippet: ${responseSnippet || "N/A"}
 
 Focus on:
 - performance issues
@@ -223,7 +252,7 @@ Focus on:
       });
       aiInsights = buildLegacyCompatibleAnalysis(object);
     } catch (error) {
-      console.error('OpenAI Analysis Failed', error);
+      console.error("OpenAI Analysis Failed", error);
       aiInsights = buildFallbackAnalysis({
         isFailed,
         statusCode,
@@ -239,7 +268,7 @@ Focus on:
     data: {
       projectId,
       endpoint,
-      failureRate: isFailed ? 100 : 0, 
+      failureRate: isFailed ? 100 : 0,
       latency: Math.round(actualLatency), // Recorded actual latency
       status,
       avgLatency: actualLatency,
@@ -261,39 +290,44 @@ Focus on:
   return { ...simulation, ai: aiInsights };
 }
 
-export async function generateProjectReliabilitySummary(simulations: Array<{
-  endpoint: string;
-  status: string;
-  avgLatency: number;
-  failureRate: number;
-  createdAt: Date;
-}>): Promise<ProjectAISummary> {
+export async function generateProjectReliabilitySummary(
+  simulations: Array<{
+    endpoint: string;
+    status: string;
+    avgLatency: number;
+    failureRate: number;
+    createdAt: Date;
+  }>,
+): Promise<ProjectAISummary> {
   if (!simulations.length) {
     return {
-      overallHealth: 'No simulation data available yet.',
-      majorRisks: ['Insufficient telemetry to assess reliability risks.'],
-      recommendedActions: ['Run multiple simulations across peak and off-peak conditions.'],
+      overallHealth: "No simulation data available yet.",
+      majorRisks: ["Insufficient telemetry to assess reliability risks."],
+      recommendedActions: [
+        "Run multiple simulations across peak and off-peak conditions.",
+      ],
     };
   }
 
-  const failureCount = simulations.filter((s) => s.status === 'FAILED').length;
-  const avgLatency = simulations.reduce((acc, s) => acc + s.avgLatency, 0) / simulations.length;
+  const failureCount = simulations.filter((s) => s.status === "FAILED").length;
+  const avgLatency =
+    simulations.reduce((acc, s) => acc + s.avgLatency, 0) / simulations.length;
   const failureRate = (failureCount / simulations.length) * 100;
 
   const fallbackSummary: ProjectAISummary = {
     overallHealth:
       failureRate > 30
-        ? 'Unstable reliability posture with significant failure concentration.'
+        ? "Unstable reliability posture with significant failure concentration."
         : avgLatency > 800
-          ? 'Performance degradation risk with elevated latency profile.'
-          : 'Generally stable system reliability with manageable risk.',
+          ? "Performance degradation risk with elevated latency profile."
+          : "Generally stable system reliability with manageable risk.",
     majorRisks: [
       `Failure rate over sampled runs: ${failureRate.toFixed(1)}%`,
       `Average latency across sampled runs: ${avgLatency.toFixed(0)}ms`,
     ],
     recommendedActions: [
-      'Introduce latency SLO alerts and endpoint-level tracing.',
-      'Apply retry/circuit-breaker patterns on unstable dependencies.',
+      "Introduce latency SLO alerts and endpoint-level tracing.",
+      "Apply retry/circuit-breaker patterns on unstable dependencies.",
     ],
   };
 
@@ -309,7 +343,7 @@ export async function generateProjectReliabilitySummary(simulations: Array<{
     }));
 
     const { object } = await generateObject({
-      model: openai('gpt-4o-mini'),
+      model: openai("gpt-4o-mini"),
       schema: z.object({
         overallHealth: z.string(),
         majorRisks: z.array(z.string()).min(1),
@@ -332,8 +366,7 @@ ${JSON.stringify(recent)}`,
       recommendedActions: object.recommendedActions,
     };
   } catch (error) {
-    console.error('Project reliability summary generation failed:', error);
+    console.error("Project reliability summary generation failed:", error);
     return fallbackSummary;
   }
 }
-

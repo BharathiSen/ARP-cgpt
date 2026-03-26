@@ -1,45 +1,60 @@
-import { Redis as UpstashRedis } from '@upstash/redis';
-import IORedis from 'ioredis';
+import { Redis as UpstashRedis } from "@upstash/redis";
+import IORedis from "ioredis";
 
-export type RedisProvider = 'upstash' | 'ioredis' | 'none';
+export type RedisProvider = "upstash" | "ioredis" | "none";
 
-type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | JsonValue[]
+  | { [key: string]: JsonValue };
 
 export interface UnifiedRedisClient {
   provider: RedisProvider;
   isAvailable: boolean;
   get<T>(key: string): Promise<T | null>;
-  set(key: string, value: JsonValue | Record<string, unknown>, ttlSeconds?: number): Promise<void>;
+  set(
+    key: string,
+    value: JsonValue | Record<string, unknown>,
+    ttlSeconds?: number,
+  ): Promise<void>;
   del(key: string): Promise<number>;
   incr(key: string): Promise<number>;
   expire(key: string, ttlSeconds: number): Promise<void>;
 }
 
-const upstashConfigured = Boolean(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN);
+const upstashConfigured = Boolean(
+  process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN,
+);
 const redisUrl = process.env.REDIS_URL;
 
 const upstash = upstashConfigured ? UpstashRedis.fromEnv() : null;
-const ioredis = !upstashConfigured && redisUrl
-  ? new IORedis(redisUrl, {
-      maxRetriesPerRequest: 1,
-      enableReadyCheck: false,
-      lazyConnect: true,
-    })
-  : null;
+const ioredis =
+  !upstashConfigured && redisUrl
+    ? new IORedis(redisUrl, {
+        maxRetriesPerRequest: 1,
+        enableReadyCheck: false,
+        lazyConnect: true,
+      })
+    : null;
 
 if (!upstashConfigured && !redisUrl) {
-  console.warn('Redis not configured: set UPSTASH_REDIS_REST_URL/UPSTASH_REDIS_REST_TOKEN or REDIS_URL');
+  console.warn(
+    "Redis not configured: set UPSTASH_REDIS_REST_URL/UPSTASH_REDIS_REST_TOKEN or REDIS_URL",
+  );
 }
 
 if (ioredis) {
-  ioredis.on('error', (error) => {
-    console.error('ioredis error:', error);
+  ioredis.on("error", (error) => {
+    console.error("ioredis error:", error);
   });
 }
 
 function tryParse<T>(value: unknown): T | null {
   if (value == null) return null;
-  if (typeof value !== 'string') return value as T;
+  if (typeof value !== "string") return value as T;
 
   try {
     return JSON.parse(value) as T;
@@ -49,7 +64,7 @@ function tryParse<T>(value: unknown): T | null {
 }
 
 export const redisClient: UnifiedRedisClient = {
-  provider: upstash ? 'upstash' : ioredis ? 'ioredis' : 'none',
+  provider: upstash ? "upstash" : ioredis ? "ioredis" : "none",
   isAvailable: Boolean(upstash || ioredis),
 
   async get<T>(key: string): Promise<T | null> {
@@ -59,7 +74,7 @@ export const redisClient: UnifiedRedisClient = {
     }
 
     if (ioredis) {
-      if (ioredis.status === 'wait') {
+      if (ioredis.status === "wait") {
         await ioredis.connect();
       }
       const value = await ioredis.get(key);
@@ -69,7 +84,11 @@ export const redisClient: UnifiedRedisClient = {
     return null;
   },
 
-  async set(key: string, value: JsonValue | Record<string, unknown>, ttlSeconds?: number): Promise<void> {
+  async set(
+    key: string,
+    value: JsonValue | Record<string, unknown>,
+    ttlSeconds?: number,
+  ): Promise<void> {
     const payload = JSON.stringify(value);
 
     if (upstash) {
@@ -82,11 +101,11 @@ export const redisClient: UnifiedRedisClient = {
     }
 
     if (ioredis) {
-      if (ioredis.status === 'wait') {
+      if (ioredis.status === "wait") {
         await ioredis.connect();
       }
       if (ttlSeconds && ttlSeconds > 0) {
-        await ioredis.set(key, payload, 'EX', ttlSeconds);
+        await ioredis.set(key, payload, "EX", ttlSeconds);
       } else {
         await ioredis.set(key, payload);
       }
@@ -99,7 +118,7 @@ export const redisClient: UnifiedRedisClient = {
     }
 
     if (ioredis) {
-      if (ioredis.status === 'wait') {
+      if (ioredis.status === "wait") {
         await ioredis.connect();
       }
       return await ioredis.del(key);
@@ -114,13 +133,13 @@ export const redisClient: UnifiedRedisClient = {
     }
 
     if (ioredis) {
-      if (ioredis.status === 'wait') {
+      if (ioredis.status === "wait") {
         await ioredis.connect();
       }
       return await ioredis.incr(key);
     }
 
-    throw new Error('Redis unavailable');
+    throw new Error("Redis unavailable");
   },
 
   async expire(key: string, ttlSeconds: number): Promise<void> {
@@ -130,7 +149,7 @@ export const redisClient: UnifiedRedisClient = {
     }
 
     if (ioredis) {
-      if (ioredis.status === 'wait') {
+      if (ioredis.status === "wait") {
         await ioredis.connect();
       }
       await ioredis.expire(key, ttlSeconds);

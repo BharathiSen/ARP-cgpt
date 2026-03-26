@@ -1,15 +1,22 @@
-import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
-import { runRealSimulation } from '@/lib/simulator';
-import prisma from '@/lib/prisma';
-import { checkRateLimit } from '@/lib/rateLimiter';
-import { logApiRequest } from '@/lib/logger';
-import { redisClient } from '@/lib/redis';
-import { createHash } from 'crypto';
+import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { runRealSimulation } from "@/lib/simulator";
+import prisma from "@/lib/prisma";
+import { checkRateLimit } from "@/lib/rateLimiter";
+import { logApiRequest } from "@/lib/logger";
+import { redisClient } from "@/lib/redis";
+import { createHash } from "crypto";
 
-function simulationCacheKey(userId: string, projectId: string, endpoint: string) {
-  const endpointHash = createHash('sha256').update(endpoint).digest('hex').slice(0, 20);
+function simulationCacheKey(
+  userId: string,
+  projectId: string,
+  endpoint: string,
+) {
+  const endpointHash = createHash("sha256")
+    .update(endpoint)
+    .digest("hex")
+    .slice(0, 20);
   return `simulation:v1:user:${userId}:project:${projectId}:endpoint:${endpointHash}`;
 }
 
@@ -18,10 +25,10 @@ export async function POST(req: Request) {
     let user = null;
 
     // 1. Check for API Key in Authorization header (Bearer token)
-    const authHeader = req.headers.get('authorization');
-    if (authHeader && authHeader.startsWith('Bearer ')) {
+    const authHeader = req.headers.get("authorization");
+    if (authHeader && authHeader.startsWith("Bearer ")) {
       const apiKeyValue = authHeader.substring(7);
-      
+
       user = await prisma.user.findUnique({ where: { apiKey: apiKeyValue } });
     }
 
@@ -29,31 +36,47 @@ export async function POST(req: Request) {
     if (!user) {
       const session = await getServerSession(authOptions);
       if (session?.user?.email) {
-        user = await prisma.user.findUnique({ where: { email: session.user.email } });
+        user = await prisma.user.findUnique({
+          where: { email: session.user.email },
+        });
       }
     }
 
     if (!user) {
       return NextResponse.json(
-        { status: 401, errorType: 'auth_error', message: 'Unauthorized: Invalid API Key or Session' },
-        { status: 401 }
+        {
+          status: 401,
+          errorType: "auth_error",
+          message: "Unauthorized: Invalid API Key or Session",
+        },
+        { status: 401 },
       );
     }
 
     // Rate Limiting
     const rateLimit = await checkRateLimit(user.id, user.isPaid);
     if (!rateLimit.success) {
-      await logApiRequest({ userId: user.id, endpoint: 'simulate', status: 429, latency: 0 });
+      await logApiRequest({
+        userId: user.id,
+        endpoint: "simulate",
+        status: 429,
+        latency: 0,
+      });
       return NextResponse.json(
-        { status: 429, errorType: 'rate_limit', message: 'Rate limit exceeded', retryAfter: 60 },
-        { 
+        {
+          status: 429,
+          errorType: "rate_limit",
+          message: "Rate limit exceeded",
+          retryAfter: 60,
+        },
+        {
           status: 429,
           headers: {
-            'X-RateLimit-Limit': rateLimit.limit.toString(),
-            'X-RateLimit-Remaining': rateLimit.remaining.toString(),
-            'X-RateLimit-Reset': rateLimit.reset?.toString() || '',
-          }
-        }
+            "X-RateLimit-Limit": rateLimit.limit.toString(),
+            "X-RateLimit-Remaining": rateLimit.remaining.toString(),
+            "X-RateLimit-Reset": rateLimit.reset?.toString() || "",
+          },
+        },
       );
     }
 
@@ -61,10 +84,19 @@ export async function POST(req: Request) {
     const { projectId, endpoint } = body;
 
     if (!projectId || !endpoint) {
-      await logApiRequest({ userId: user.id, endpoint: 'simulate', status: 400, latency: 0 });
+      await logApiRequest({
+        userId: user.id,
+        endpoint: "simulate",
+        status: 400,
+        latency: 0,
+      });
       return NextResponse.json(
-        { status: 400, errorType: 'validation_error', message: 'Missing required parameters: projectId and endpoint' },
-        { status: 400 }
+        {
+          status: 400,
+          errorType: "validation_error",
+          message: "Missing required parameters: projectId and endpoint",
+        },
+        { status: 400 },
       );
     }
 
@@ -81,7 +113,7 @@ export async function POST(req: Request) {
           data: {
             projectId,
             endpoint,
-            failureRate: cached.status === 'FAILED' ? 100 : 0,
+            failureRate: cached.status === "FAILED" ? 100 : 0,
             latency: Math.round(cached.latency),
             status: cached.status,
             avgLatency: cached.latency,
@@ -124,7 +156,7 @@ export async function POST(req: Request) {
           status: simulation.status,
           ai: simulation.ai,
         },
-        90
+        90,
       );
       await redisClient.del(`user_projects:${user.id}`);
     }
@@ -138,16 +170,16 @@ export async function POST(req: Request) {
       ai: simulation.ai,
     });
   } catch (error) {
-    console.error('Simulation error:', error);
-    const detail = error instanceof Error ? error.message : 'Unknown error';
+    console.error("Simulation error:", error);
+    const detail = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
       {
         status: 500,
-        errorType: 'internal_error',
-        message: 'Failed to process simulation request.',
-        ...(process.env.NODE_ENV !== 'production' ? { detail } : {}),
+        errorType: "internal_error",
+        message: "Failed to process simulation request.",
+        ...(process.env.NODE_ENV !== "production" ? { detail } : {}),
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

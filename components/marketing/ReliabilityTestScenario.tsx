@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { motion } from 'framer-motion';
-import { ArrowRight } from 'lucide-react';
+import { motion } from "framer-motion";
+import { ArrowRight } from "lucide-react";
 
 export default function ReliabilityTestScenario() {
   return (
@@ -28,7 +28,9 @@ export default function ReliabilityTestScenario() {
         <div className="space-y-6 flex-1">
           {/* Section 1 */}
           <div>
-            <div className="text-xs font-medium text-[#9AA6C4] mb-2 uppercase tracking-wide">API Endpoint</div>
+            <div className="text-xs font-medium text-[#9AA6C4] mb-2 uppercase tracking-wide">
+              API Endpoint
+            </div>
             <div className="font-mono text-sm inline-flex items-center gap-2 bg-[rgba(0,200,255,0.08)] text-[#4DEBFF] py-[6px] px-[10px] rounded-[6px] border border-[#00C8FF]/10">
               <span className="text-[#00C8FF] font-bold">POST</span>
               /billing/charge
@@ -37,7 +39,9 @@ export default function ReliabilityTestScenario() {
 
           {/* Section 2 */}
           <div className="bg-white/[0.02] p-4 rounded-xl border border-[rgba(0,200,255,0.05)]">
-            <div className="text-xs font-medium text-[#9AA6C4] mb-3 uppercase tracking-wide">Failure Simulation</div>
+            <div className="text-xs font-medium text-[#9AA6C4] mb-3 uppercase tracking-wide">
+              Failure Simulation
+            </div>
             <ul className="space-y-3 text-sm text-[#9AA6C4]">
               <li className="flex items-center gap-3">
                 <div className="w-1.5 h-1.5 rounded-full bg-[#00C8FF] shadow-[0_0_8px_rgba(0,200,255,0.8)]"></div>
@@ -57,11 +61,17 @@ export default function ReliabilityTestScenario() {
           {/* Section 3 & 4 Grid */}
           <div className="grid grid-cols-2 gap-4 pt-2">
             <div>
-              <div className="text-xs font-medium text-[#9AA6C4] mb-1.5 uppercase tracking-wide">Traffic Load</div>
-              <div className="text-white text-sm font-medium">500 requests / second</div>
+              <div className="text-xs font-medium text-[#9AA6C4] mb-1.5 uppercase tracking-wide">
+                Traffic Load
+              </div>
+              <div className="text-white text-sm font-medium">
+                500 requests / second
+              </div>
             </div>
             <div>
-              <div className="text-xs font-medium text-[#9AA6C4] mb-1.5 uppercase tracking-wide">Simulation Duration</div>
+              <div className="text-xs font-medium text-[#9AA6C4] mb-1.5 uppercase tracking-wide">
+                Simulation Duration
+              </div>
               <div className="text-white text-sm font-medium">10 minutes</div>
             </div>
           </div>

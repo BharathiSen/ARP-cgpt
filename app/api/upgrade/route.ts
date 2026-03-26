@@ -1,14 +1,14 @@
-import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
-import prisma from '@/lib/prisma';
-import { sendUpgradeEmail } from '@/lib/email';
+import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import prisma from "@/lib/prisma";
+import { sendUpgradeEmail } from "@/lib/email";
 
 export async function POST() {
   const session = await getServerSession(authOptions);
 
   if (!session?.user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const userId = (session.user as { id: string }).id;
@@ -26,7 +26,10 @@ export async function POST() {
 
     return NextResponse.json({ success: true, user });
   } catch (error) {
-    console.error('Upgrade Error:', error);
-    return NextResponse.json({ error: 'Failed to upgrade user' }, { status: 500 });
+    console.error("Upgrade Error:", error);
+    return NextResponse.json(
+      { error: "Failed to upgrade user" },
+      { status: 500 },
+    );
   }
 }

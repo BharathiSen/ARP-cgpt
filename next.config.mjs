@@ -1,11 +1,11 @@
-import { withSentryConfig } from '@sentry/nextjs';
+import { withSentryConfig } from "@sentry/nextjs";
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
   eslint: { ignoreDuringBuilds: true },
   typescript: { ignoreBuildErrors: true },
-  output: 'standalone',
+  output: "standalone",
 };
 
 export default withSentryConfig(
@@ -20,5 +20,5 @@ export default withSentryConfig(
     transpileClientSDK: true,
     hideSourceMaps: true,
     disableLogger: true,
-  }
+  },
 );

@@ -1,18 +1,21 @@
-import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
-import Razorpay from 'razorpay';
+import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import Razorpay from "razorpay";
 
 export async function POST() {
   try {
     const session = await getServerSession(authOptions);
 
     if (!session || !session.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
-      return NextResponse.json({ error: 'Razorpay keys not configured' }, { status: 500 });
+      return NextResponse.json(
+        { error: "Razorpay keys not configured" },
+        { status: 500 },
+      );
     }
 
     const razorpay = new Razorpay({
@@ -24,7 +27,7 @@ export async function POST() {
 
     const options = {
       amount: 49900, // ₹499.00 in paise
-      currency: 'INR',
+      currency: "INR",
       receipt: `rcptid_${userId}_${Date.now()}`,
     };
 
@@ -32,7 +35,10 @@ export async function POST() {
 
     return NextResponse.json(order);
   } catch (error) {
-    console.error('Razorpay order creation error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    console.error("Razorpay order creation error:", error);
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 },
+    );
   }
 }

@@ -1,13 +1,13 @@
-import Hero from '@/components/marketing/Hero';
-import ProblemSection from '@/components/marketing/ProblemSection';
-import HowItWorks from '@/components/marketing/HowItWorks';
-import UseCases from '@/components/marketing/UseCases';
-import FeatureGrid from '@/components/marketing/FeatureGrid';
-import ProductDemo from '@/components/marketing/ProductDemo';
-import DocsSection from '@/components/marketing/DocsSection';
-import Pricing from '@/components/marketing/Pricing';
-import CTA from '@/components/marketing/CTA';
-import Footer from '@/components/layout/Footer';
+import Hero from "@/components/marketing/Hero";
+import ProblemSection from "@/components/marketing/ProblemSection";
+import HowItWorks from "@/components/marketing/HowItWorks";
+import UseCases from "@/components/marketing/UseCases";
+import FeatureGrid from "@/components/marketing/FeatureGrid";
+import ProductDemo from "@/components/marketing/ProductDemo";
+import DocsSection from "@/components/marketing/DocsSection";
+import Pricing from "@/components/marketing/Pricing";
+import CTA from "@/components/marketing/CTA";
+import Footer from "@/components/layout/Footer";
 
 export default function Home() {
   return (
