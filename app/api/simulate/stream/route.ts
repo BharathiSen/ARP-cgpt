@@ -2,11 +2,26 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { runRealSimulation } from '@/lib/simulator';
 import { checkRateLimit } from '@/lib/rateLimiter';
+import prisma from '@/lib/prisma';
 
 export async function GET(req: Request) {
   const session = await getServerSession(authOptions);
   
   if (!session?.user) {
+    return new Response('Unauthorized', { status: 401 });
+  }
+
+  const userEmail = session.user.email;
+  if (!userEmail) {
+    return new Response('Unauthorized', { status: 401 });
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { email: userEmail },
+    select: { id: true, isPaid: true },
+  });
+
+  if (!user) {
     return new Response('Unauthorized', { status: 401 });
   }
 
@@ -18,7 +33,18 @@ export async function GET(req: Request) {
     return new Response('Missing parameters', { status: 400 });
   }
 
-  const userId = (session.user as { id: string }).id;
+  const rateLimit = await checkRateLimit(user.id, user.isPaid);
+  if (!rateLimit.success) {
+    return new Response(JSON.stringify({ message: 'Rate limit exceeded', retryAfter: 60 }), {
+      status: 429,
+      headers: {
+        'Content-Type': 'application/json',
+        'X-RateLimit-Limit': rateLimit.limit.toString(),
+        'X-RateLimit-Remaining': rateLimit.remaining.toString(),
+        'X-RateLimit-Reset': rateLimit.reset?.toString() || '',
+      },
+    });
+  }
 
   // Real-time SSE Stream
   const stream = new ReadableStream({
@@ -28,13 +54,6 @@ export async function GET(req: Request) {
       };
 
       try {
-        const rateLimit = await checkRateLimit(userId, false);
-        if (!rateLimit.success) {
-          sendEvent('error', { message: 'Rate limit exceeded' });
-          controller.close();
-          return;
-        }
-
         sendEvent('status', { message: 'Simulation Validated' });
         
         // Brief artificial delay for UI realism before hitting real checks

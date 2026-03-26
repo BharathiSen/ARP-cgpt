@@ -52,6 +52,16 @@ interface Project {
   simulations?: Simulation[];
 }
 
+interface RedisObservability {
+  cache_hit_rate: number;
+  rate_limit_blocked: number;
+  redis: {
+    connected: boolean;
+    provider: 'upstash' | 'local';
+    latency: number;
+  };
+}
+
 export default function DashboardClient({ user }: { user: { isPaid: boolean, isAdmin: boolean } | null }) {
   void user;
   const { data: session, status } = useSession();
@@ -89,6 +99,7 @@ export default function DashboardClient({ user }: { user: { isPaid: boolean, isA
   const [isApiKeyLoading, setIsApiKeyLoading] = useState(false);
   const [newlyGeneratedKey, setNewlyGeneratedKey] = useState<string | null>(null);
   const [isApiKeyVisible, setIsApiKeyVisible] = useState(false);
+  const [observability, setObservability] = useState<RedisObservability | null>(null);
 
   const maskApiKey = (key: string) => {
     if (!key) return '';
@@ -228,6 +239,18 @@ export default function DashboardClient({ user }: { user: { isPaid: boolean, isA
     }
   };
 
+  const fetchObservability = async () => {
+    try {
+      const res = await fetch('/api/metrics/redis');
+      const data = await readJsonSafe(res);
+      if (res.ok && data && typeof data === 'object') {
+        setObservability(data as RedisObservability);
+      }
+    } catch (error) {
+      console.error('Failed to fetch observability metrics', error);
+    }
+  };
+
   const handleGenerateApiKey = async () => {
     setIsApiKeyLoading(true);
     setNewlyGeneratedKey(null);
@@ -291,6 +314,7 @@ export default function DashboardClient({ user }: { user: { isPaid: boolean, isA
     else if (status === 'authenticated') {
       fetchProjects();
       fetchApiKey();
+      fetchObservability();
       // Read prompt from URL if present
       if (typeof window !== 'undefined') {
         const urlParams = new URLSearchParams(window.location.search);
@@ -305,6 +329,16 @@ export default function DashboardClient({ user }: { user: { isPaid: boolean, isA
         }
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status]);
+
+  useEffect(() => {
+    if (status !== 'authenticated') return;
+    const id = setInterval(() => {
+      fetchObservability();
+    }, 15000);
+
+    return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
 
@@ -881,6 +915,31 @@ export default function DashboardClient({ user }: { user: { isPaid: boolean, isA
                 {/* ── Data Visualization ── */}
                 {selectedProject?.simulations && selectedProject.simulations.length > 0 && (
                   <>
+                    <div className="ds-card p-5 mb-5" style={{ border: '1px solid rgba(0,200,255,0.18)' }}>
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="font-bold text-white text-sm uppercase tracking-widest">Observability</h3>
+                        <span className="text-[11px] font-mono" style={{ color: observability?.redis.connected ? '#00C8FF' : '#ff7070' }}>
+                          {observability?.redis.connected ? 'Redis Healthy' : 'Redis Unavailable'}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                        <div className="rounded-lg p-3" style={{ background: 'rgba(0,200,255,0.06)', border: '1px solid rgba(0,200,255,0.14)' }}>
+                          <p className="text-[10px] uppercase tracking-widest" style={{ color: '#9AA6C4' }}>Cache Hit Rate</p>
+                          <p className="text-xl font-bold text-white mt-1">{observability?.cache_hit_rate?.toFixed(1) ?? '0.0'}%</p>
+                        </div>
+                        <div className="rounded-lg p-3" style={{ background: 'rgba(255,77,77,0.06)', border: '1px solid rgba(255,77,77,0.14)' }}>
+                          <p className="text-[10px] uppercase tracking-widest" style={{ color: '#9AA6C4' }}>Requests Blocked</p>
+                          <p className="text-xl font-bold text-white mt-1">{observability?.rate_limit_blocked ?? 0}</p>
+                        </div>
+                        <div className="rounded-lg p-3" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.10)' }}>
+                          <p className="text-[10px] uppercase tracking-widest" style={{ color: '#9AA6C4' }}>Redis</p>
+                          <p className="text-sm font-semibold text-white mt-1">
+                            {(observability?.redis.provider ?? 'local').toUpperCase()} {observability?.redis.connected ? `(${observability?.redis.latency ?? -1}ms)` : '(offline)'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
                     {/* --- FEATURE 3: AI SUMMARY UI --- */}
                     <div className="ds-card p-6 mb-5" style={{ background: 'linear-gradient(to right, rgba(0,200,255,0.05), rgba(0,0,0,0))' }}>
                       <div className="flex items-center gap-2 mb-3">

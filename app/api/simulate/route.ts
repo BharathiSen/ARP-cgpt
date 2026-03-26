@@ -5,6 +5,13 @@ import { runRealSimulation } from '@/lib/simulator';
 import prisma from '@/lib/prisma';
 import { checkRateLimit } from '@/lib/rateLimiter';
 import { logApiRequest } from '@/lib/logger';
+import { redisClient } from '@/lib/redis';
+import { createHash } from 'crypto';
+
+function simulationCacheKey(userId: string, projectId: string, endpoint: string) {
+  const endpointHash = createHash('sha256').update(endpoint).digest('hex').slice(0, 20);
+  return `simulation:v1:user:${userId}:project:${projectId}:endpoint:${endpointHash}`;
+}
 
 export async function POST(req: Request) {
   try {
@@ -61,9 +68,66 @@ export async function POST(req: Request) {
       );
     }
 
+    const cacheKey = simulationCacheKey(user.id, projectId, endpoint);
+    if (redisClient.isAvailable) {
+      const cached = await redisClient.get<{
+        latency: number;
+        status: string;
+        ai: unknown;
+      }>(cacheKey);
+
+      if (cached) {
+        const simulation = await prisma.simulation.create({
+          data: {
+            projectId,
+            endpoint,
+            failureRate: cached.status === 'FAILED' ? 100 : 0,
+            latency: Math.round(cached.latency),
+            status: cached.status,
+            avgLatency: cached.latency,
+            insight: JSON.stringify(cached.ai ?? {}),
+          },
+          select: {
+            id: true,
+            projectId: true,
+            endpoint: true,
+            failureRate: true,
+            latency: true,
+            status: true,
+            avgLatency: true,
+            insight: true,
+            createdAt: true,
+          },
+        });
+
+        await redisClient.del(`user_projects:${user.id}`);
+
+        return NextResponse.json({
+          ...simulation,
+          latency: simulation.latency,
+          status: simulation.status,
+          ai: cached.ai,
+          cached: true,
+        });
+      }
+    }
+
     const startTime = Date.now();
     const simulation = await runRealSimulation(projectId, endpoint);
     const latency = Date.now() - startTime;
+
+    if (redisClient.isAvailable) {
+      await redisClient.set(
+        cacheKey,
+        {
+          latency: simulation.latency,
+          status: simulation.status,
+          ai: simulation.ai,
+        },
+        90
+      );
+      await redisClient.del(`user_projects:${user.id}`);
+    }
 
     await logApiRequest({ userId: user.id, endpoint, status: 200, latency });
 

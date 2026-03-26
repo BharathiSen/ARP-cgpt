@@ -1,39 +1,33 @@
-import { Redis } from '@upstash/redis';
-
-const hasRedisConfig = process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN;
-export const redisCache = hasRedisConfig ? Redis.fromEnv() : null;
+import { redisClient } from '@/lib/redis';
+import { incrementMetric } from '@/lib/telemetry';
 
 export async function getCachedOrFetch<T>(
   key: string,
   fetchData: () => Promise<T>,
   ttlSeconds: number = 60
 ): Promise<T> {
-  if (!redisCache) return fetchData();
+  if (!redisClient.isAvailable) {
+    await incrementMetric('cache_misses');
+    return fetchData();
+  }
 
   try {
-    const cached = await redisCache.get<T>(key);
-    if (cached) {
+    const cached = await redisClient.get<T>(key);
+    if (cached !== null) {
       console.log(`Redis Cache Hit: ${key}`);
-      if (typeof cached === 'string') {
-        try {
-          return JSON.parse(cached) as T;
-        } catch {
-          // Fall through to fresh fetch if cache contains invalid legacy payload.
-        }
-      } else {
-        return cached;
-      }
+      await incrementMetric('cache_hits');
+      return cached;
     }
+    await incrementMetric('cache_misses');
   } catch (err) {
     console.warn('Redis read failed:', err);
+    await incrementMetric('cache_misses');
   }
 
   const data = await fetchData();
 
   try {
-    if (redisCache) {
-      await redisCache.setex(key, ttlSeconds, data);
-    }
+    await redisClient.set(key, data as Record<string, unknown>, ttlSeconds);
   } catch (err) {
     console.warn('Redis write failed:', err);
   }
