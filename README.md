@@ -24,6 +24,7 @@ The platform is built on modern serverless architecture:
 - **Database:** PostgreSQL, Prisma ORM
 - **Cache / Performance:** Redis (Upstash & ioredis)
 - **Authentication:** NextAuth.js (Credentials + JWT)
+- **DevOps & Hosting:** Vercel (Serverless), Docker & Docker Compose (Local Dev)
 - **Styling:** Tailwind CSS, Framer Motion
 - **Integrations:** OpenAI SDK, Resend (Emails), Razorpay (Payments), Sentry (Observability)
 
