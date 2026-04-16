@@ -20,13 +20,13 @@ The platform is built on modern serverless architecture:
 - **Caching & Observability:** Redis acts as a high-speed caching layer and system health probe, minimizing database reads for frequent queries.
 
 ## 🛠️ Tech Stack
-- **Framework:** Next.js 14, React 18, TypeScript
-- **Database:** PostgreSQL, Prisma ORM
+- **Framework:** Next.js 14 (App Router), React 18, TypeScript
+- **Database / ORM:** PostgreSQL, Prisma ORM
 - **Cache / Performance:** Redis (Upstash & ioredis)
-- **Authentication:** NextAuth.js (Credentials + JWT)
-- **DevOps & Hosting:** Vercel (Serverless), Docker & Docker Compose (Local Dev)
-- **Styling:** Tailwind CSS, Framer Motion
-- **Integrations:** OpenAI SDK, Resend (Emails), Razorpay (Payments), Sentry (Observability)
+- **Authentication:** NextAuth.js (Auth.js) with custom Credentials & JWT
+- **DevOps & Hosting:** Vercel (Serverless Deployment), Docker (Local DB Dev), GitHub Actions (CI Pipeline)
+- **UI / Styling:** Tailwind CSS, Framer Motion, Recharts (Data Visualization), Lucide React (Icons), React Hot Toast
+- **Integrations:** OpenAI SDK (AI Insights), Resend (Triggered Emails), Razorpay (Payment Gateway), Sentry (Observability)
 
 ## 🧗‍♂️ Challenges Overcome
 1. **Real-Time Delivery:** Sending live latency test results to the frontend without hanging normal HTTP requests. Solved by implementing native Next.js Server-Sent Events (SSE).
