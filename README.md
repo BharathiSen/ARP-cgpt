@@ -1,7 +1,8 @@
 # ⚡ AI Reliability Lab
 
-![AI Reliability Lab Platform Preview](./public/hero.png)
-> *Note: Please save the provided screenshot as `hero.png` inside your `public/` folder so it appears here!*
+<p align="center">
+  <img src="public/hero.png" alt="AI Reliability Lab Platform Preview" width="100%" />
+</p>
 
 ## 📖 The Problem
 APIs break, latency spikes, and debugging in production is chaotic. Most developers only discover system bottlenecks or timeout failures *after* their customers complain. Finding out how your system behaves under stress shouldn't require a catastrophic outage.
