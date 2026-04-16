@@ -30,8 +30,6 @@ model Project {
   simulations Simulation[]
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
-
-  @@index([userId])
 }
 
 model Simulation {
@@ -50,7 +48,4 @@ model Simulation {
   suggestions     Json?
   anomalies       Json?
   createdAt   DateTime @default(now())
-
-  @@index([projectId])
-  @@index([endpoint])
 }
