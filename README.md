@@ -1,5 +1,7 @@
 # ⚡ AI Reliability Lab
 
+**[🚀 View Live Demo](https://arp-cgpt.vercel.app/)**
+
 <p align="center">
   <img src="public/hero.png" alt="AI Reliability Lab Platform Preview" width="100%" />
 </p>
