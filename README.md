@@ -26,7 +26,7 @@ The platform is built on modern serverless architecture:
 - **Authentication:** NextAuth.js (Auth.js) with custom Credentials & JWT
 - **DevOps & Hosting:** Vercel (Serverless Deployment), Docker (Local DB Dev), GitHub Actions (CI Pipeline)
 - **UI / Styling:** Tailwind CSS, Framer Motion, Recharts (Data Visualization), Lucide React (Icons), React Hot Toast
-- **Integrations:** OpenAI SDK (AI Insights), Resend (Triggered Emails), Razorpay (Payment Gateway), Sentry (Observability)
+- **Integrations:** Resend (Triggered Emails) and Sentry (Observability)
 
 ## 🧗‍♂️ Challenges Overcome
 1. **Real-Time Delivery:** Sending live latency test results to the frontend without hanging normal HTTP requests. Solved by implementing native Next.js Server-Sent Events (SSE).
