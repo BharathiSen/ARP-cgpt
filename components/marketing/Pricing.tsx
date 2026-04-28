@@ -25,7 +25,7 @@ const tiers = [
     features: [
       "Advanced failure simulation",
       "Load testing support",
-      "AI reliability insights",
+      "API reliability insights",
       "Increased request limits",
     ],
     highlight: true,

@@ -82,7 +82,7 @@ export default function LoginPage() {
               <Activity className="w-6 h-6" style={{ color: "#00C8FF" }} />
             </div>
             <span className="font-bold text-lg ds-gradient-text">
-              AI Reliability Lab
+              API Reliability Lab
             </span>
           </div>
 

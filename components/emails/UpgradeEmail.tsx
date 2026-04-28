@@ -36,7 +36,7 @@ export const UpgradeEmail = ({ name }: UpgradeEmailProps) => {
           </Section>
           <Hr style={hr} />
           <Text style={footer}>
-            AI Reliability Platform • Secure & robust AI products.
+            API Reliability Platform • Secure & robust API products.
           </Text>
         </Container>
       </Body>

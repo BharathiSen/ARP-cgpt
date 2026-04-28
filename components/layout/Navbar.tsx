@@ -82,7 +82,7 @@ export default function Navbar() {
             <Activity className="w-5 h-5" style={{ color: "#00C8FF" }} />
           </div>
           <span className="font-bold tracking-wide ds-gradient-text text-[15px]">
-            AI Reliability Lab
+            API Reliability Lab
           </span>
         </Link>
 

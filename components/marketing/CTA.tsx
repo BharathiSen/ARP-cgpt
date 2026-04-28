@@ -43,7 +43,7 @@ export default function CTA() {
             className="text-lg mb-12 max-w-2xl mx-auto"
             style={{ color: "#9AA6C4" }}
           >
-            Join thousands of engineers who trust AI Reliability Lab to uncover
+            Join thousands of engineers who trust API Reliability Lab to uncover
             hidden flaws before they hit production.
           </p>
 

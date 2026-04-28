@@ -53,7 +53,7 @@ export default function Pricing() {
         key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
         amount: orderData.amount,
         currency: orderData.currency,
-        name: "AI Reliability Lab",
+        name: "API Reliability Lab",
         description: "Pro Subscription",
         order_id: orderData.id,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -120,7 +120,7 @@ export default function Pricing() {
         </h1>
         <p className="text-zinc-400 text-center mb-8">
           You need an active subscription to access the dashboard and core
-          features of the AI Reliability Lab.
+          features of the API Reliability Lab.
         </p>
 
         <div className="space-y-4 mb-8">

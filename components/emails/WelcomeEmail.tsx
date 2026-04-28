@@ -20,13 +20,13 @@ export const WelcomeEmail = ({ name }: WelcomeEmailProps) => {
   return (
     <Html>
       <Head />
-      <Preview>Welcome to AI Reliability Platform!</Preview>
+      <Preview>Welcome to API Reliability Platform!</Preview>
       <Body style={main}>
         <Container style={container}>
           <Heading style={h1}>Welcome, {name}!</Heading>
           <Text style={text}>
-            We&apos;re thrilled to have you here. The AI Reliability Platform
-            helps you simulate and mitigate edge cases for your LLM
+            We&apos;re thrilled to have you here. The API Reliability Platform
+            helps you simulate and mitigate edge cases for your API
             applications.
           </Text>
           <Section style={btnContainer}>
@@ -36,7 +36,7 @@ export const WelcomeEmail = ({ name }: WelcomeEmailProps) => {
           </Section>
           <Hr style={hr} />
           <Text style={footer}>
-            Secure & robust AI products await. Happy building!
+            Secure & robust API products await. Happy building!
           </Text>
         </Container>
       </Body>

@@ -12,7 +12,7 @@ export default function Footer() {
                 <Activity className="w-5 h-5 text-[#00C8FF]" />
               </div>
               <span className="text-white font-medium tracking-wide">
-                AI Reliability Lab
+                API Reliability Lab
               </span>
             </Link>
             <p className="text-[#9AA6C4] text-sm max-w-sm mb-8 leading-relaxed">
@@ -185,7 +185,7 @@ export default function Footer() {
 
         <div className="pt-8 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-4">
           <p className="text-[#9AA6C4] text-sm">
-            © {new Date().getFullYear()} AI Reliability Lab. All rights
+            © {new Date().getFullYear()} API Reliability Lab. All rights
             reserved.
           </p>
           <div className="flex gap-6">

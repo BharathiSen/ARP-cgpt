@@ -1,16 +1,16 @@
-# ⚡ AI Reliability Lab
+# ⚡ API Reliability Lab
 
 **[🚀 View Live Demo](https://arp-cgpt.vercel.app/)**
 
 <p align="center">
-  <img src="public/hero.png" alt="AI Reliability Lab Platform Preview" width="100%" />
+  <img src="public/hero.png" alt="API Reliability Lab Platform Preview" width="100%" />
 </p>
 
 ## 📖 The Problem
 APIs break, latency spikes, and debugging in production is chaotic. Most developers only discover system bottlenecks or timeout failures *after* their customers complain. Finding out how your system behaves under stress shouldn't require a catastrophic outage.
 
 ## 💡 My Solution
-**AI Reliability Lab** is a full-stack SaaS platform designed to safely simulate API failures and stress-test endpoints before they reach production. It actively probes your endpoints, streams real-time latency metrics, and leverages AI to provide structured, actionable insights on how to improve your system's resilience.
+**API Reliability Lab** is a full-stack SaaS platform designed to safely simulate API failures and stress-test endpoints before they reach production. It actively probes your endpoints, streams real-time latency metrics, and leverages AI to provide structured, actionable insights on how to improve your system's resilience.
 
 ## 🏗️ Architecture Explanation
 The platform is built on modern serverless architecture:

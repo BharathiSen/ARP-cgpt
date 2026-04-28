@@ -42,7 +42,7 @@ export default function SuccessPage() {
 
         <h1 className="text-2xl font-bold mb-4">Payment Successful!</h1>
         <p className="text-zinc-400 mb-8">
-          Thank you for upgrading to AI Reliability Lab Pro. Your account has
+          Thank you for upgrading to API Reliability Lab Pro. Your account has
           been upgraded and you now have full access.
         </p>
 

@@ -8,7 +8,7 @@ import { Toaster } from "react-hot-toast";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "AI Reliability Lab | Production-Ready API Stress Testing",
+  title: "API Reliability Lab | Production-Ready API Stress Testing",
   description:
     "Test API reliability before production with AI-powered system analysis. Minimal SaaS for modern engineering teams.",
 };

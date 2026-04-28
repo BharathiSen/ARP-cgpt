@@ -366,14 +366,14 @@ export default function DashboardClient({
         // Auto-download file
         const blob = new Blob(
           [
-            `AI Reliability Lab API Key\n\nYour Secret Key:\n${data.apiKey}\n\nKeep this key secure. Do not share it.`,
+            `API Reliability Lab API Key\n\nYour Secret Key:\n${data.apiKey}\n\nKeep this key secure. Do not share it.`,
           ],
           { type: "text/plain" },
         );
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = `ai-reliability-lab-api-key.txt`;
+        a.download = `api-reliability-lab-api-key.txt`;
         document.body.appendChild(a);
         a.click();
         window.URL.revokeObjectURL(url);
@@ -928,8 +928,8 @@ export default function DashboardClient({
                   Developer API
                 </h2>
               </div>
-              <p className="text-xs mb-4" style={{ color: "#9AA6C4" }}>
-                Use your API key to integrate AI Reliability Lab directly into
+                <p className="text-xs mb-4" style={{ color: "#9AA6C4" }}>
+                Use your API key to integrate API Reliability Lab directly into
                 your CI/CD pipelines.
               </p>
 
