@@ -2,10 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ─────────────────────────────────────────────────────────────
-  DESIGN SYSTEM TOKENS — API Reliability Lab
-   Primary: #00C8FF  |  Secondary: #4DEBFF  |  BG: #05070f
-───────────────────────────────────────────────────────────── */
 :root {
   --primary: #00c8ff;
   --secondary: #1ea7ff;
