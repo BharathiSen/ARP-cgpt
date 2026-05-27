@@ -13,6 +13,7 @@ type CallLLMOpts = {
   maxRetries?: number;
 };
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function callLLMSchema<T = any>(opts: CallLLMOpts): Promise<T> {
   const model = opts.model ?? "gpt-4o-mini";
   const schema = opts.schema;

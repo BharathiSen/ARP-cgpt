@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { runRealSimulation } from "@/lib/simulator";
 import prisma from "@/lib/prisma";
 import { checkRateLimit } from "@/lib/rateLimiter";
 import { logApiRequest } from "@/lib/logger";
@@ -145,6 +144,7 @@ export async function POST(req: Request) {
     }
 
     // Enqueue a background job for the simulation and return 202.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const job = await (prisma as any).job.create({
       data: {
         type: "simulation",

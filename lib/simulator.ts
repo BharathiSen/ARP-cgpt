@@ -257,6 +257,7 @@ Focus on:
         maxRetries: 2,
       });
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       aiInsights = buildLegacyCompatibleAnalysis(object as any);
     } catch (error) {
       console.error("OpenAI Analysis Failed", error);
