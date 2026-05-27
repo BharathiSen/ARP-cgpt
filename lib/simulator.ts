@@ -1,7 +1,6 @@
 import prisma from "@/lib/prisma";
-import { generateObject } from "ai";
-import { openai } from "@ai-sdk/openai";
 import { z } from "zod";
+import { callLLMSchema } from "@/lib/llm";
 
 type RiskLevel = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 
@@ -212,18 +211,17 @@ export async function runRealSimulation(projectId: string, endpoint: string) {
 
   if (process.env.OPENAI_API_KEY && endpoint) {
     try {
-      const { object } = await generateObject({
-        model: openai("gpt-4o-mini"),
-        schema: z.object({
-          confidenceScore: z.number().min(0).max(100),
-          riskLevel: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]),
-          insights: z.array(z.string()).min(1),
-          recommendedActions: z.array(z.string()).min(1),
-          anomalies: z.array(z.string()),
-          reasoning: z.string().min(1),
-          signalsUsed: z.array(z.string()).min(1),
-        }),
-        prompt: `Analyze the following API response for reliability.
+      const schema = z.object({
+        confidenceScore: z.number().min(0).max(100),
+        riskLevel: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]),
+        insights: z.array(z.string()).min(1),
+        recommendedActions: z.array(z.string()).min(1),
+        anomalies: z.array(z.string()),
+        reasoning: z.string().min(1),
+        signalsUsed: z.array(z.string()).min(1),
+      });
+
+      const prompt = `Analyze the following API response for reliability.
 
 Return STRICT JSON with:
 - confidenceScore (0-100)
@@ -248,9 +246,18 @@ Focus on:
 - performance issues
 - failure patterns
 - system bottlenecks
-- reliability risks`,
+- reliability risks`;
+
+      const object = await callLLMSchema({
+        model: "gpt-4o-mini",
+        prompt,
+        schema,
+        cacheKey: `analysis:${endpoint}:${statusCode}:${Math.round(actualLatency)}`,
+        ttlSeconds: 90,
+        maxRetries: 2,
       });
-      aiInsights = buildLegacyCompatibleAnalysis(object);
+
+      aiInsights = buildLegacyCompatibleAnalysis(object as any);
     } catch (error) {
       console.error("OpenAI Analysis Failed", error);
       aiInsights = buildFallbackAnalysis({
@@ -269,7 +276,7 @@ Focus on:
       projectId,
       endpoint,
       failureRate: isFailed ? 100 : 0,
-      latency: Math.round(actualLatency), // Recorded actual latency
+      latency: Math.round(actualLatency),
       status,
       avgLatency: actualLatency,
       insight,
@@ -319,8 +326,8 @@ export async function generateProjectReliabilitySummary(
       failureRate > 30
         ? "Unstable reliability posture with significant failure concentration."
         : avgLatency > 800
-          ? "Performance degradation risk with elevated latency profile."
-          : "Generally stable system reliability with manageable risk.",
+        ? "Performance degradation risk with elevated latency profile."
+        : "Generally stable system reliability with manageable risk.",
     majorRisks: [
       `Failure rate over sampled runs: ${failureRate.toFixed(1)}%`,
       `Average latency across sampled runs: ${avgLatency.toFixed(0)}ms`,
@@ -342,14 +349,13 @@ export async function generateProjectReliabilitySummary(
       createdAt: s.createdAt,
     }));
 
-    const { object } = await generateObject({
-      model: openai("gpt-4o-mini"),
-      schema: z.object({
-        overallHealth: z.string(),
-        majorRisks: z.array(z.string()).min(1),
-        recommendedActions: z.array(z.string()).min(1),
-      }),
-      prompt: `Analyze these API test results and summarize system reliability.
+    const schema = z.object({
+      overallHealth: z.string(),
+      majorRisks: z.array(z.string()).min(1),
+      recommendedActions: z.array(z.string()).min(1),
+    });
+
+    const prompt = `Analyze these API test results and summarize system reliability.
 
 Return STRICT JSON with:
 - overallHealth
@@ -357,7 +363,15 @@ Return STRICT JSON with:
 - recommendedActions (array)
 
 Dataset:
-${JSON.stringify(recent)}`,
+${JSON.stringify(recent)}`;
+
+    const object = await callLLMSchema({
+      model: "gpt-4o-mini",
+      prompt,
+      schema,
+      cacheKey: `project_summary:${recent.map((r) => r.endpoint).join("|")}`,
+      ttlSeconds: 60,
+      maxRetries: 2,
     });
 
     return {

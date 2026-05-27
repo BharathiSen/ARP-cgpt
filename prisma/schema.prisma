@@ -49,3 +49,16 @@ model Simulation {
   anomalies       Json?
   createdAt   DateTime @default(now())
 }
+
+model Job {
+  id         String   @id @default(cuid())
+  type       String
+  status     String   @default("PENDING")
+  payload    Json
+  result     Json?
+  attempts   Int      @default(0)
+  lastError  String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  processedAt DateTime?
+}

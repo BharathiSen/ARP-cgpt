@@ -144,31 +144,22 @@ export async function POST(req: Request) {
       }
     }
 
-    const startTime = Date.now();
-    const simulation = await runRealSimulation(projectId, endpoint);
-    const latency = Date.now() - startTime;
+    // Enqueue a background job for the simulation and return 202.
+    const job = await (prisma as any).job.create({
+      data: {
+        type: "simulation",
+        payload: { projectId, endpoint, userId: user.id },
+      },
+    });
 
+    // Invalidate user projects cache so UI can reflect upcoming results
     if (redisClient.isAvailable) {
-      await redisClient.set(
-        cacheKey,
-        {
-          latency: simulation.latency,
-          status: simulation.status,
-          ai: simulation.ai,
-        },
-        90,
-      );
       await redisClient.del(`user_projects:${user.id}`);
     }
 
-    await logApiRequest({ userId: user.id, endpoint, status: 200, latency });
+    await logApiRequest({ userId: user.id, endpoint: "simulate:enqueued", status: 202, latency: 0 });
 
-    return NextResponse.json({
-      ...simulation,
-      latency: simulation.latency,
-      status: simulation.status,
-      ai: simulation.ai,
-    });
+    return NextResponse.json({ jobId: job.id, status: "ENQUEUED" }, { status: 202 });
   } catch (error) {
     console.error("Simulation error:", error);
     const detail = error instanceof Error ? error.message : "Unknown error";
