@@ -93,6 +93,11 @@ interface RedisObservability {
   };
 }
 
+type FetchProjectsOptions = {
+  ensureProject?: Project;
+  selectProjectId?: string;
+};
+
 export default function DashboardClient({
   user,
 }: {
@@ -333,7 +338,18 @@ export default function DashboardClient({
     };
   };
 
-  const fetchProjects = async () => {
+  const getProjectNameKey = (name: string) => name.trim().toLowerCase();
+
+  const mergeProjectIntoList = (list: Project[], project: Project) => [
+    project,
+    ...list.filter(
+      (item) =>
+        item.id !== project.id &&
+        getProjectNameKey(item.name) !== getProjectNameKey(project.name),
+    ),
+  ];
+
+  const fetchProjects = async (options: FetchProjectsOptions = {}) => {
     try {
       const res = await fetch("/api/projects");
       const data = await readJsonSafe(res);
@@ -351,23 +367,40 @@ export default function DashboardClient({
       }
 
       if (Array.isArray(data)) {
-        const normalized = data
+        let normalized = data
           .map(normalizeProject)
           .filter((project): project is Project => Boolean(project));
+
+        if (
+          options.ensureProject &&
+          !normalized.some((project) => project.id === options.ensureProject?.id)
+        ) {
+          normalized = mergeProjectIntoList(normalized, options.ensureProject);
+        }
 
         setProjects(normalized);
         setSelectedProject((current) => {
           if (!normalized.length) return null;
+          if (options.selectProjectId) {
+            return (
+              normalized.find((p) => p.id === options.selectProjectId) ??
+              options.ensureProject ??
+              normalized[0]
+            );
+          }
           if (!current) return normalized[0];
 
           const refreshedCurrent = normalized.find((p) => p.id === current.id);
           return refreshedCurrent ?? normalized[0];
         });
+        return normalized;
       }
     } catch (error) {
       console.error("Failed to fetch projects", error);
       toast.error("Network error while loading projects.");
     }
+
+    return null;
   };
 
   const fetchApiKey = async () => {
@@ -499,8 +532,9 @@ export default function DashboardClient({
     const trimmedName = newProjectName.trim();
     if (!trimmedName || isCreating) return;
 
+    const newProjectNameKey = getProjectNameKey(trimmedName);
     const hasLocalDuplicate = projects.some(
-      (project) => project.name.trim().toLowerCase() === trimmedName.toLowerCase(),
+      (project) => getProjectNameKey(project.name) === newProjectNameKey,
     );
 
     if (hasLocalDuplicate) {
@@ -529,35 +563,26 @@ export default function DashboardClient({
         return;
       }
 
-      if (!data || typeof data !== "object" || !("id" in data)) {
+      const createdProject = normalizeProject(data);
+
+      if (!createdProject) {
         toast.error("Project created, but response was invalid. Refreshing list...");
         setNewProjectName("");
         await fetchProjects();
         return;
       }
 
-      const createdProject = {
-        ...(data as Project),
-        simulations:
-          data &&
-          typeof data === "object" &&
-          "simulations" in data &&
-          Array.isArray((data as { simulations?: unknown }).simulations)
-            ? ((data as { simulations: Simulation[] }).simulations ?? [])
-            : [],
-      } as Project;
       setProjects((prev) => {
-        const withoutDuplicate = prev.filter(
-          (project) => project.id !== createdProject.id,
-        );
-        return [createdProject, ...withoutDuplicate];
+        return mergeProjectIntoList(prev, createdProject);
       });
       setSelectedProject(createdProject);
       setNewProjectName("");
       toast.success("Project created successfully.");
 
-      // Refresh in background to sync full server state and simulations.
-      void fetchProjects();
+      await fetchProjects({
+        ensureProject: createdProject,
+        selectProjectId: createdProject.id,
+      });
 
       // Cross-validate: ensure server didn't create a conflicting project
       // (protects against race conditions where another project with same
@@ -571,8 +596,8 @@ export default function DashboardClient({
             .filter((project): project is Project => Boolean(project));
           const sameName = serverProjects.filter(
             (project) =>
-              project.name.trim().toLowerCase() ===
-                createdProject.name.trim().toLowerCase(),
+              getProjectNameKey(project.name) ===
+                getProjectNameKey(createdProject.name),
           );
 
           if (sameName.length > 1) {
@@ -1066,8 +1091,13 @@ export default function DashboardClient({
                               toast.error("Project name cannot be empty.");
                               return;
                             }
+                            const renamedProjectNameKey = getProjectNameKey(trimmed);
                             if (
-                              projects.some((pr) => pr.id !== p.id && pr.name.trim().toLowerCase() === trimmed.toLowerCase())
+                              projects.some(
+                                (pr) =>
+                                  pr.id !== p.id &&
+                                  getProjectNameKey(pr.name) === renamedProjectNameKey,
+                              )
                             ) {
                               toast.error("A project with this name already exists.");
                               return;

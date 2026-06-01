@@ -44,6 +44,22 @@ const isDuplicateProjectNameError = (error: unknown) =>
   (error instanceof Prisma.PrismaClientKnownRequestError &&
     error.code === "P2002");
 
+const normalizeProjectName = (name: string) => name.trim().toLowerCase();
+
+const getProjectNameLockId = (userId: string, name: string) => {
+  const digest = crypto
+    .createHash("sha256")
+    .update(`${userId}:${normalizeProjectName(name)}`)
+    .digest("hex")
+    .slice(0, 16);
+  const unsigned = BigInt(`0x${digest}`);
+  const maxSignedBigInt = BigInt("0x7fffffffffffffff");
+
+  return unsigned > maxSignedBigInt
+    ? unsigned - BigInt("0x10000000000000000")
+    : unsigned;
+};
+
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
@@ -112,8 +128,7 @@ export async function POST(req: Request) {
     // check for duplicates and create the project. This serializes concurrent
     // attempts and prevents duplicates without relying solely on Redis or a
     // DB unique index being present.
-    const digest = crypto.createHash("sha256").update(`${userId}:${name.toLowerCase()}`).digest("hex").slice(0, 16);
-    const lockId = BigInt(`0x${digest}`);
+    const lockId = getProjectNameLockId(userId, name);
 
     let project;
     try {
@@ -191,8 +206,7 @@ export async function PUT(req: Request) {
     // If renaming, use an advisory lock per (userId + newName) to serialize
     // the check-and-update operation and prevent duplicates.
     if (typeof name === "string" && name.length > 0) {
-      const digest = crypto.createHash("sha256").update(`${userId}:${name.toLowerCase()}`).digest("hex").slice(0, 16);
-      const lockId = BigInt(`0x${digest}`);
+      const lockId = getProjectNameLockId(userId, name);
 
       try {
         const updated = await prisma.$transaction(async (tx) => {
