@@ -78,6 +78,11 @@ interface Project {
   simulations?: Simulation[];
 }
 
+interface ApiErrorResponse {
+  error?: string;
+  message?: string;
+}
+
 interface RedisObservability {
   cache_hit_rate: number;
   rate_limit_blocked: number;
@@ -300,6 +305,34 @@ export default function DashboardClient({
     }
   };
 
+  const getErrorMessage = (data: unknown, fallback: string) => {
+    if (data && typeof data === "object" && "error" in data) {
+      const { error } = data as ApiErrorResponse;
+      if (typeof error === "string" && error) return error;
+    }
+
+    return fallback;
+  };
+
+  const isProject = (value: unknown): value is Project =>
+    Boolean(
+      value &&
+        typeof value === "object" &&
+        "id" in value &&
+        typeof value.id === "string" &&
+        "name" in value &&
+        typeof value.name === "string",
+    );
+
+  const normalizeProject = (value: unknown): Project | null => {
+    if (!isProject(value)) return null;
+
+    return {
+      ...value,
+      simulations: Array.isArray(value.simulations) ? value.simulations : [],
+    };
+  };
+
   const fetchProjects = async () => {
     try {
       const res = await fetch("/api/projects");
@@ -318,13 +351,9 @@ export default function DashboardClient({
       }
 
       if (Array.isArray(data)) {
-        // Normalize projects to ensure `simulations` is always an array.
-        const normalized = data.map((p) => ({
-          ...(p as any),
-          simulations: Array.isArray((p as any).simulations)
-            ? (p as any).simulations
-            : [],
-        })) as Project[];
+        const normalized = data
+          .map(normalizeProject)
+          .filter((project): project is Project => Boolean(project));
 
         setProjects(normalized);
         setSelectedProject((current) => {
@@ -537,10 +566,12 @@ export default function DashboardClient({
         const res2 = await fetch("/api/projects");
         const serverData = await readJsonSafe(res2);
         if (Array.isArray(serverData)) {
-          const sameName = serverData.filter(
-            (p: any) =>
-              typeof p.name === "string" &&
-              p.name.trim().toLowerCase() ===
+          const serverProjects = serverData
+            .map(normalizeProject)
+            .filter((project): project is Project => Boolean(project));
+          const sameName = serverProjects.filter(
+            (project) =>
+              project.name.trim().toLowerCase() ===
                 createdProject.name.trim().toLowerCase(),
           );
 
@@ -548,7 +579,7 @@ export default function DashboardClient({
             // Conflict detected: remove optimistic insert and refresh list
             setProjects((prev) => prev.filter((p) => p.id !== createdProject.id));
             setSelectedProject((current) => {
-              if (current?.id === createdProject.id) return serverData[0] ?? null;
+              if (current?.id === createdProject.id) return serverProjects[0] ?? null;
               return current;
             });
             toast.error(
@@ -1050,7 +1081,7 @@ export default function DashboardClient({
                               });
                               const data = await readJsonSafe(res);
                               if (!res.ok) {
-                                const msg = (data as any)?.error || "Failed to rename project.";
+                                const msg = getErrorMessage(data, "Failed to rename project.");
                                 toast.error(msg);
                                 return;
                               }
@@ -1085,7 +1116,7 @@ export default function DashboardClient({
                               });
                               const data = await readJsonSafe(res);
                               if (!res.ok) {
-                                toast.error((data as any)?.error || "Failed to delete project.");
+                                toast.error(getErrorMessage(data, "Failed to delete project."));
                                 setProjects(before);
                                 return;
                               }

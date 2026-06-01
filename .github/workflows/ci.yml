@@ -8,13 +8,17 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: "postgresql://postgres:password@localhost:5432/test?schema=public"
+      NEXTAUTH_SECRET: "test-secret"
+      NEXTAUTH_URL: "http://localhost:3000"
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "20"
           cache: "npm"
@@ -36,7 +40,3 @@ jobs:
 
       - name: Build Project
         run: npm run build
-        env:
-          DATABASE_URL: "postgresql://postgres:password@localhost:5432/test?schema=public"
-          NEXTAUTH_SECRET: "test-secret"
-          NEXTAUTH_URL: "http://localhost:3000"

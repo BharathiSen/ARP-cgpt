@@ -32,6 +32,18 @@ const projectListQuery = {
   select: projectSelect,
 };
 
+class DuplicateProjectNameError extends Error {
+  constructor() {
+    super("DUPLICATE");
+    this.name = "DuplicateProjectNameError";
+  }
+}
+
+const isDuplicateProjectNameError = (error: unknown) =>
+  error instanceof DuplicateProjectNameError ||
+  (error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === "P2002");
+
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
@@ -114,20 +126,15 @@ export async function POST(req: Request) {
         });
 
         if (dup) {
-          const err: any = new Error("DUPLICATE");
-          err.code = "DUPLICATE";
-          throw err;
+          throw new DuplicateProjectNameError();
         }
 
         const created = await tx.project.create({ data: { name, description, userId }, select: { id: true } });
         const full = await tx.project.findUnique({ where: { id: created.id }, select: projectSelect });
         return full;
       });
-    } catch (e: any) {
-      if (e?.code === "DUPLICATE") {
-        return NextResponse.json({ error: "A project with this name already exists." }, { status: 409 });
-      }
-      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+    } catch (e: unknown) {
+      if (isDuplicateProjectNameError(e)) {
         return NextResponse.json({ error: "A project with this name already exists." }, { status: 409 });
       }
       throw e;
@@ -201,9 +208,7 @@ export async function PUT(req: Request) {
           });
 
           if (duplicate) {
-            const err: any = new Error("DUPLICATE");
-            err.code = "DUPLICATE";
-            throw err;
+            throw new DuplicateProjectNameError();
           }
 
           return tx.project.update({
@@ -220,11 +225,8 @@ export async function PUT(req: Request) {
         }
 
         return NextResponse.json(updated);
-      } catch (e: any) {
-        if (e?.code === "DUPLICATE") {
-          return NextResponse.json({ error: "A project with this name already exists." }, { status: 409 });
-        }
-        if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+      } catch (e: unknown) {
+        if (isDuplicateProjectNameError(e)) {
           return NextResponse.json({ error: "A project with this name already exists." }, { status: 409 });
         }
         throw e;
