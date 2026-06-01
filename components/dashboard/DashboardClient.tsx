@@ -138,6 +138,7 @@ export default function DashboardClient({
   const [observability, setObservability] = useState<RedisObservability | null>(
     null,
   );
+  const [projectMenuOpen, setProjectMenuOpen] = useState<string | null>(null);
 
   const maskApiKey = (key: string) => {
     if (!key) return "";
@@ -317,8 +318,22 @@ export default function DashboardClient({
       }
 
       if (Array.isArray(data)) {
-        setProjects(data);
-        if (data.length > 0 && !selectedProject) setSelectedProject(data[0]);
+        // Normalize projects to ensure `simulations` is always an array.
+        const normalized = data.map((p) => ({
+          ...(p as any),
+          simulations: Array.isArray((p as any).simulations)
+            ? (p as any).simulations
+            : [],
+        })) as Project[];
+
+        setProjects(normalized);
+        setSelectedProject((current) => {
+          if (!normalized.length) return null;
+          if (!current) return normalized[0];
+
+          const refreshedCurrent = normalized.find((p) => p.id === current.id);
+          return refreshedCurrent ?? normalized[0];
+        });
       }
     } catch (error) {
       console.error("Failed to fetch projects", error);
@@ -452,13 +467,24 @@ export default function DashboardClient({
 
   const createProject = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newProjectName.trim() || isCreating) return;
+    const trimmedName = newProjectName.trim();
+    if (!trimmedName || isCreating) return;
+
+    const hasLocalDuplicate = projects.some(
+      (project) => project.name.trim().toLowerCase() === trimmedName.toLowerCase(),
+    );
+
+    if (hasLocalDuplicate) {
+      toast.error("A project with this name already exists.");
+      return;
+    }
+
     setIsCreating(true);
     try {
       const res = await fetch("/api/projects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newProjectName }),
+        body: JSON.stringify({ name: trimmedName }),
       });
       const data = await readJsonSafe(res);
 
@@ -474,9 +500,68 @@ export default function DashboardClient({
         return;
       }
 
+      if (!data || typeof data !== "object" || !("id" in data)) {
+        toast.error("Project created, but response was invalid. Refreshing list...");
+        setNewProjectName("");
+        await fetchProjects();
+        return;
+      }
+
+      const createdProject = {
+        ...(data as Project),
+        simulations:
+          data &&
+          typeof data === "object" &&
+          "simulations" in data &&
+          Array.isArray((data as { simulations?: unknown }).simulations)
+            ? ((data as { simulations: Simulation[] }).simulations ?? [])
+            : [],
+      } as Project;
+      setProjects((prev) => {
+        const withoutDuplicate = prev.filter(
+          (project) => project.id !== createdProject.id,
+        );
+        return [createdProject, ...withoutDuplicate];
+      });
+      setSelectedProject(createdProject);
       setNewProjectName("");
-      await fetchProjects();
       toast.success("Project created successfully.");
+
+      // Refresh in background to sync full server state and simulations.
+      void fetchProjects();
+
+      // Cross-validate: ensure server didn't create a conflicting project
+      // (protects against race conditions where another project with same
+      // name was created concurrently on the server).
+      try {
+        const res2 = await fetch("/api/projects");
+        const serverData = await readJsonSafe(res2);
+        if (Array.isArray(serverData)) {
+          const sameName = serverData.filter(
+            (p: any) =>
+              typeof p.name === "string" &&
+              p.name.trim().toLowerCase() ===
+                createdProject.name.trim().toLowerCase(),
+          );
+
+          if (sameName.length > 1) {
+            // Conflict detected: remove optimistic insert and refresh list
+            setProjects((prev) => prev.filter((p) => p.id !== createdProject.id));
+            setSelectedProject((current) => {
+              if (current?.id === createdProject.id) return serverData[0] ?? null;
+              return current;
+            });
+            toast.error(
+              "Project name conflict detected on server. Please pick a different name.",
+            );
+            void fetchProjects();
+            return;
+          }
+        }
+      } catch (e) {
+        // If cross-validation fails, we don't want to remove the optimistic project.
+        console.warn("Cross-validation of created project failed", e);
+      }
     } catch (error) {
       console.error("Failed to create project", error);
       toast.error("Network error while creating project.");
@@ -884,38 +969,139 @@ export default function DashboardClient({
                   </p>
                 )}
                 {projects.map((p) => (
-                  <button
-                    key={p.id}
-                    onClick={() => {
-                      setSelectedProject(p);
-                      setSimulationResult(null);
-                    }}
-                    className="w-full text-left px-4 py-3 rounded-xl border transition-all"
-                    style={
-                      selectedProject?.id === p.id
-                        ? {
-                            background: "rgba(0,200,255,0.12)",
-                            borderColor: "rgba(0,200,255,0.45)",
-                            color: "#fff",
-                          }
-                        : {
-                            background: "rgba(255,255,255,0.03)",
-                            borderColor: "rgba(0,200,255,0.10)",
-                            color: "#9AA6C4",
-                          }
-                    }
-                  >
-                    <p className="font-semibold text-sm text-white truncate">
-                      {p.name}
-                    </p>
-                    <p
-                      className="text-[11px] mt-0.5"
-                      style={{ color: "#9AA6C4" }}
+                  <div key={p.id} className="relative">
+                    <button
+                      onClick={() => {
+                        setSelectedProject(p);
+                        setSimulationResult(null);
+                      }}
+                      className="w-full text-left px-4 py-3 rounded-xl border transition-all"
+                      style={
+                        selectedProject?.id === p.id
+                          ? {
+                              background: "rgba(0,200,255,0.12)",
+                              borderColor: "rgba(0,200,255,0.45)",
+                              color: "#fff",
+                            }
+                          : {
+                              background: "rgba(255,255,255,0.03)",
+                              borderColor: "rgba(0,200,255,0.10)",
+                              color: "#9AA6C4",
+                            }
+                      }
                     >
-                      {p.simulations?.length || 0} simulation
-                      {p.simulations?.length !== 1 ? "s" : ""}
-                    </p>
-                  </button>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-semibold text-sm text-white truncate">
+                            {p.name}
+                          </p>
+                          <p
+                            className="text-[11px] mt-0.5"
+                            style={{ color: "#9AA6C4" }}
+                          >
+                            {p.simulations?.length || 0} simulation
+                            {p.simulations?.length !== 1 ? "s" : ""}
+                          </p>
+                        </div>
+                        <div>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setProjectMenuOpen((prev) => (prev === p.id ? null : p.id));
+                            }}
+                            className="px-2 py-1 rounded text-sm text-[#9AA6C4] hover:text-white"
+                            aria-label="project actions"
+                          >
+                            •••
+                          </button>
+                        </div>
+                      </div>
+                    </button>
+
+                    {projectMenuOpen === p.id && (
+                      <div
+                        className="absolute right-2 top-3 z-20 bg-zinc-900 border rounded shadow-md"
+                        style={{ minWidth: 160 }}
+                      >
+                        <button
+                          className="w-full text-left px-3 py-2 text-sm text-[#9AA6C4] hover:bg-zinc-800"
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            setProjectMenuOpen(null);
+                            const newName = window.prompt("Rename project:", p.name);
+                            if (!newName) return;
+                            const trimmed = newName.trim();
+                            if (!trimmed) {
+                              toast.error("Project name cannot be empty.");
+                              return;
+                            }
+                            if (
+                              projects.some((pr) => pr.id !== p.id && pr.name.trim().toLowerCase() === trimmed.toLowerCase())
+                            ) {
+                              toast.error("A project with this name already exists.");
+                              return;
+                            }
+
+                            try {
+                              const res = await fetch("/api/projects", {
+                                method: "PUT",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ id: p.id, name: trimmed }),
+                              });
+                              const data = await readJsonSafe(res);
+                              if (!res.ok) {
+                                const msg = (data as any)?.error || "Failed to rename project.";
+                                toast.error(msg);
+                                return;
+                              }
+                              // Update locally
+                              setProjects((prev) => prev.map((pr) => (pr.id === p.id ? { ...pr, name: trimmed } : pr)));
+                              setSelectedProject((cur) => (cur && cur.id === p.id ? { ...cur, name: trimmed } : cur));
+                              toast.success("Project renamed.");
+                            } catch (e) {
+                              console.error(e);
+                              toast.error("Network error while renaming project.");
+                            }
+                          }}
+                        >
+                          Rename
+                        </button>
+                        <button
+                          className="w-full text-left px-3 py-2 text-sm text-red-400 hover:bg-zinc-800"
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            setProjectMenuOpen(null);
+                            const ok = window.confirm(`Delete project "${p.name}"? This cannot be undone.`);
+                            if (!ok) return;
+                            // Optimistic remove
+                            const before = projects;
+                            setProjects((prev) => prev.filter((pr) => pr.id !== p.id));
+                            if (selectedProject?.id === p.id) setSelectedProject(null);
+                            try {
+                              const res = await fetch("/api/projects", {
+                                method: "DELETE",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ id: p.id }),
+                              });
+                              const data = await readJsonSafe(res);
+                              if (!res.ok) {
+                                toast.error((data as any)?.error || "Failed to delete project.");
+                                setProjects(before);
+                                return;
+                              }
+                              toast.success("Project deleted.");
+                            } catch (e) {
+                              console.error(e);
+                              toast.error("Network error while deleting project.");
+                              setProjects(before);
+                            }
+                          }}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 ))}
               </div>
             </div>

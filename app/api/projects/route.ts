@@ -2,30 +2,34 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
+import crypto from "crypto";
 
 import { getCachedOrFetch } from "@/lib/cache";
 import { redisClient } from "@/lib/redis";
 
+const projectSelect = {
+  id: true,
+  name: true,
+  description: true,
+  createdAt: true,
+  updatedAt: true,
+  simulations: {
+    select: {
+      id: true,
+      endpoint: true,
+      status: true,
+      avgLatency: true,
+      insight: true,
+      createdAt: true,
+    },
+    orderBy: { createdAt: "desc" as const },
+  },
+};
+
 const projectListQuery = {
   where: {} as { userId: string },
-  select: {
-    id: true,
-    name: true,
-    description: true,
-    createdAt: true,
-    updatedAt: true,
-    simulations: {
-      select: {
-        id: true,
-        endpoint: true,
-        status: true,
-        avgLatency: true,
-        insight: true,
-        createdAt: true,
-      },
-      orderBy: { createdAt: "desc" as const },
-    },
-  },
+  select: projectSelect,
 };
 
 export async function GET() {
@@ -92,13 +96,49 @@ export async function POST(req: Request) {
       );
     }
 
-    const project = await prisma.project.create({
-      data: {
-        name,
-        description,
-        userId,
-      },
-    });
+    // Use an advisory transaction lock per (userId + name) to atomically
+    // check for duplicates and create the project. This serializes concurrent
+    // attempts and prevents duplicates without relying solely on Redis or a
+    // DB unique index being present.
+    const digest = crypto.createHash("sha256").update(`${userId}:${name.toLowerCase()}`).digest("hex").slice(0, 16);
+    const lockId = BigInt(`0x${digest}`);
+
+    let project;
+    try {
+      project = await prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockId})`;
+
+        const dup = await tx.project.findFirst({
+          where: { userId, name: { equals: name, mode: "insensitive" } },
+          select: { id: true },
+        });
+
+        if (dup) {
+          const err: any = new Error("DUPLICATE");
+          err.code = "DUPLICATE";
+          throw err;
+        }
+
+        const created = await tx.project.create({ data: { name, description, userId }, select: { id: true } });
+        const full = await tx.project.findUnique({ where: { id: created.id }, select: projectSelect });
+        return full;
+      });
+    } catch (e: any) {
+      if (e?.code === "DUPLICATE") {
+        return NextResponse.json({ error: "A project with this name already exists." }, { status: 409 });
+      }
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+        return NextResponse.json({ error: "A project with this name already exists." }, { status: 409 });
+      }
+      throw e;
+    }
+
+    if (!project) {
+      return NextResponse.json(
+        { error: "Project created, but failed to fetch details." },
+        { status: 500 },
+      );
+    }
 
     // Invalidate Redis Cache since data mutated
     if (redisClient.isAvailable) {
@@ -141,10 +181,60 @@ export async function PUT(req: Request) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 });
     }
 
+    // If renaming, use an advisory lock per (userId + newName) to serialize
+    // the check-and-update operation and prevent duplicates.
+    if (typeof name === "string" && name.length > 0) {
+      const digest = crypto.createHash("sha256").update(`${userId}:${name.toLowerCase()}`).digest("hex").slice(0, 16);
+      const lockId = BigInt(`0x${digest}`);
+
+      try {
+        const updated = await prisma.$transaction(async (tx) => {
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockId})`;
+
+          const duplicate = await tx.project.findFirst({
+            where: {
+              userId,
+              id: { not: id },
+              name: { equals: name, mode: "insensitive" },
+            },
+            select: { id: true },
+          });
+
+          if (duplicate) {
+            const err: any = new Error("DUPLICATE");
+            err.code = "DUPLICATE";
+            throw err;
+          }
+
+          return tx.project.update({
+            where: { id },
+            data: {
+              ...(typeof name === "string" && name.length ? { name } : {}),
+              ...(typeof description === "string" ? { description } : {}),
+            },
+          });
+        });
+
+        if (redisClient.isAvailable) {
+          await redisClient.del(`user_projects:${userId}`);
+        }
+
+        return NextResponse.json(updated);
+      } catch (e: any) {
+        if (e?.code === "DUPLICATE") {
+          return NextResponse.json({ error: "A project with this name already exists." }, { status: 409 });
+        }
+        if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+          return NextResponse.json({ error: "A project with this name already exists." }, { status: 409 });
+        }
+        throw e;
+      }
+    }
+
+    // If not renaming, just update description or other fields normally.
     const updated = await prisma.project.update({
       where: { id },
       data: {
-        ...(typeof name === "string" && name.length ? { name } : {}),
         ...(typeof description === "string" ? { description } : {}),
       },
     });
@@ -160,5 +250,40 @@ export async function PUT(req: Request) {
       { error: "Failed to update project" },
       { status: 500 },
     );
+  }
+}
+
+export async function DELETE(req: Request) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const userId = (session.user as { id: string }).id;
+    const body = await req.json();
+    const id = typeof body?.id === "string" ? body.id : "";
+
+    if (!id) {
+      return NextResponse.json({ error: "Project id is required" }, { status: 400 });
+    }
+
+    const existing = await prisma.project.findFirst({ where: { id, userId } });
+    if (!existing) {
+      return NextResponse.json({ error: "Project not found" }, { status: 404 });
+    }
+
+    // Delete simulations first to avoid FK issues, then delete project.
+    await prisma.simulation.deleteMany({ where: { projectId: id } });
+    await prisma.project.delete({ where: { id } });
+
+    if (redisClient.isAvailable) {
+      await redisClient.del(`user_projects:${userId}`);
+    }
+
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    console.error("Failed to delete project:", error);
+    return NextResponse.json({ error: "Failed to delete project" }, { status: 500 });
   }
 }

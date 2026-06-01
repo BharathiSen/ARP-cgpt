@@ -30,6 +30,7 @@ model Project {
   simulations Simulation[]
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
+  @@unique([userId, name])
 }
 
 model Simulation {
