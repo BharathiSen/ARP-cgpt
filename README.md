@@ -101,3 +101,5 @@ There is **no** fake “Pay Securely” unlock. `/api/upgrade` is disabled on pu
 - Endpoints must be `http`/`https` and resolve to public IPs
 - Simulations require the `projectId` to belong to the current user
 - Admin emails come from `ADMIN_EMAIL` / `ADMIN_EMAILS` or `User.isAdmin` in the DB — not hardcoded addresses
+- API keys are **hashed** (SHA-256); the full key is shown only once at generation
+- `middleware.ts` guards dashboard + private APIs; metrics require a session

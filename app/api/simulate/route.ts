@@ -32,7 +32,8 @@ export async function POST(req: Request) {
     const authHeader = req.headers.get("authorization");
     if (authHeader && authHeader.startsWith("Bearer ")) {
       const apiKeyValue = authHeader.substring(7);
-      user = await prisma.user.findUnique({ where: { apiKey: apiKeyValue } });
+      const { findUserByApiKey } = await import("@/lib/apiKey");
+      user = await findUserByApiKey(apiKeyValue);
     }
 
     if (!user) {

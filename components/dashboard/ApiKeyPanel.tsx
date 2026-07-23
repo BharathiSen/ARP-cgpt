@@ -42,8 +42,8 @@ export function ApiKeyPanel({
         </h2>
       </div>
       <p className="text-xs mb-4" style={{ color: "#9AA6C4" }}>
-        Use your API key to integrate API Reliability Lab directly into your
-        CI/CD pipelines.
+        Use your API key to call <code className="text-[#00C8FF]">POST /api/simulate</code>.
+        The full key is shown only once when generated — we store a hash, not the secret.
       </p>
 
       <div className="space-y-3">
@@ -64,7 +64,11 @@ export function ApiKeyPanel({
               }}
             >
               <span className="truncate mr-2">
-                {isApiKeyVisible ? apiKey : maskApiKey(apiKey)}
+                {newlyGeneratedKey && isApiKeyVisible
+                  ? newlyGeneratedKey
+                  : newlyGeneratedKey && !isApiKeyVisible
+                    ? maskApiKey(newlyGeneratedKey)
+                    : apiKey}
               </span>
               <button
                 onClick={onToggleVisibility}
@@ -83,9 +87,17 @@ export function ApiKeyPanel({
             </div>
             <div className="flex gap-2">
               <Button
-                onClick={() => onCopyKey(apiKey)}
+                onClick={() =>
+                  onCopyKey(newlyGeneratedKey ?? apiKey ?? "")
+                }
                 variant="ghost"
                 className="flex-1 text-xs py-1.5 border border-[#1e293b]"
+                disabled={!newlyGeneratedKey}
+                title={
+                  newlyGeneratedKey
+                    ? "Copy full key"
+                    : "Full key is only available right after generation"
+                }
               >
                 Copy
               </Button>

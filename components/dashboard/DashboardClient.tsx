@@ -877,6 +877,7 @@ export default function DashboardClient({
               onDismissNewKey={() => {
                 setIsApiKeyVisible(false);
                 setNewlyGeneratedKey(null);
+                void fetchApiKey();
               }}
               onExportReport={handleExportReport}
             />
