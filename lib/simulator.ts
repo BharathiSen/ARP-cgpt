@@ -1,6 +1,7 @@
 import prisma from "@/lib/prisma";
 import { z } from "zod";
 import { callLLMSchema } from "@/lib/llm";
+import { assertSafeHttpUrl } from "@/lib/urlSafety";
 
 type RiskLevel = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 
@@ -117,6 +118,9 @@ function buildFallbackAnalysis(params: {
 }
 
 export async function runRealSimulation(projectId: string, endpoint: string) {
+  // Block SSRF: private IPs, localhost, link-local, cloud metadata, non-http(s).
+  const safeEndpoint = await assertSafeHttpUrl(endpoint);
+
   const startTime = Date.now();
   let isFailed = false;
   let actualLatency = 0;
@@ -128,7 +132,7 @@ export async function runRealSimulation(projectId: string, endpoint: string) {
   let responseHeaders: Record<string, string> = {};
 
   const historical = await prisma.simulation.aggregate({
-    where: { projectId, endpoint },
+    where: { projectId, endpoint: safeEndpoint },
     _avg: { avgLatency: true },
   });
   const historicalAvgLatency = historical._avg.avgLatency ?? 0;
@@ -136,13 +140,15 @@ export async function runRealSimulation(projectId: string, endpoint: string) {
   const maxAttempts = 2;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      const response = await fetch(endpoint, {
+      const response = await fetch(safeEndpoint, {
         method: "GET",
         headers: {
           "User-Agent":
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
           Accept: "text/html,application/xhtml+xml,application/json,text/plain",
         },
+        // Prevent redirect-based SSRF to internal addresses.
+        redirect: "manual",
         signal: AbortSignal.timeout ? AbortSignal.timeout(10000) : undefined,
       });
 
@@ -206,10 +212,10 @@ export async function runRealSimulation(projectId: string, endpoint: string) {
     isFailed,
     statusCode,
     latency: actualLatency,
-    endpoint,
+    endpoint: safeEndpoint,
   });
 
-  if (process.env.OPENAI_API_KEY && endpoint) {
+  if (process.env.OPENAI_API_KEY && safeEndpoint) {
     try {
       const schema = z.object({
         confidenceScore: z.number().min(0).max(100),
@@ -231,7 +237,7 @@ Return STRICT JSON with:
 - anomalies (unexpected patterns or failures)
 
 Context:
-- Endpoint: ${endpoint}
+- Endpoint: ${safeEndpoint}
 - Status code: ${statusCode}
 - Latency: ${actualLatency}ms
 - Failure state: ${isFailed}
@@ -252,7 +258,7 @@ Focus on:
         model: "gpt-4o-mini",
         prompt,
         schema,
-        cacheKey: `analysis:${endpoint}:${statusCode}:${Math.round(actualLatency)}`,
+        cacheKey: `analysis:${safeEndpoint}:${statusCode}:${Math.round(actualLatency)}`,
         ttlSeconds: 90,
         maxRetries: 2,
       });
@@ -265,7 +271,7 @@ Focus on:
         isFailed,
         statusCode,
         latency: actualLatency,
-        endpoint,
+        endpoint: safeEndpoint,
       });
     }
   }
@@ -275,7 +281,7 @@ Focus on:
   const simulation = await prisma.simulation.create({
     data: {
       projectId,
-      endpoint,
+      endpoint: safeEndpoint,
       failureRate: isFailed ? 100 : 0,
       latency: Math.round(actualLatency),
       status,

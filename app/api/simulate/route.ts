@@ -6,6 +6,8 @@ import { checkRateLimit } from "@/lib/rateLimiter";
 import { logApiRequest } from "@/lib/logger";
 import { redisClient } from "@/lib/redis";
 import { createHash } from "crypto";
+import { assertSafeHttpUrl, UnsafeUrlError } from "@/lib/urlSafety";
+import { findOwnedProject } from "@/lib/projectAccess";
 
 function simulationCacheKey(
   userId: string,
@@ -99,7 +101,50 @@ export async function POST(req: Request) {
       );
     }
 
-    const cacheKey = simulationCacheKey(user.id, projectId, endpoint);
+    // Only allow simulations against projects owned by this user.
+    const project = await findOwnedProject(projectId, user.id);
+    if (!project) {
+      await logApiRequest({
+        userId: user.id,
+        endpoint: "simulate",
+        status: 404,
+        latency: 0,
+      });
+      return NextResponse.json(
+        {
+          status: 404,
+          errorType: "not_found",
+          message: "Project not found or access denied",
+        },
+        { status: 404 },
+      );
+    }
+
+    let safeEndpoint: string;
+    try {
+      safeEndpoint = await assertSafeHttpUrl(endpoint);
+    } catch (err) {
+      const message =
+        err instanceof UnsafeUrlError
+          ? err.message
+          : "Invalid or unsafe endpoint URL";
+      await logApiRequest({
+        userId: user.id,
+        endpoint: "simulate",
+        status: 400,
+        latency: 0,
+      });
+      return NextResponse.json(
+        {
+          status: 400,
+          errorType: "validation_error",
+          message,
+        },
+        { status: 400 },
+      );
+    }
+
+    const cacheKey = simulationCacheKey(user.id, project.id, safeEndpoint);
     if (redisClient.isAvailable) {
       const cached = await redisClient.get<{
         latency: number;
@@ -110,8 +155,8 @@ export async function POST(req: Request) {
       if (cached) {
         const simulation = await prisma.simulation.create({
           data: {
-            projectId,
-            endpoint,
+            projectId: project.id,
+            endpoint: safeEndpoint,
             failureRate: cached.status === "FAILED" ? 100 : 0,
             latency: Math.round(cached.latency),
             status: cached.status,
@@ -148,7 +193,11 @@ export async function POST(req: Request) {
     const job = await (prisma as any).job.create({
       data: {
         type: "simulation",
-        payload: { projectId, endpoint, userId: user.id },
+        payload: {
+          projectId: project.id,
+          endpoint: safeEndpoint,
+          userId: user.id,
+        },
       },
     });
 

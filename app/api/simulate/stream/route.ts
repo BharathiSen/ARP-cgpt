@@ -3,6 +3,8 @@ import { authOptions } from "@/lib/auth";
 import { runRealSimulation } from "@/lib/simulator";
 import { checkRateLimit } from "@/lib/rateLimiter";
 import prisma from "@/lib/prisma";
+import { assertSafeHttpUrl, UnsafeUrlError } from "@/lib/urlSafety";
+import { findOwnedProject } from "@/lib/projectAccess";
 
 export async function GET(req: Request) {
   const session = await getServerSession(authOptions);
@@ -31,6 +33,32 @@ export async function GET(req: Request) {
 
   if (!projectId || !endpoint) {
     return new Response("Missing parameters", { status: 400 });
+  }
+
+  // Only allow simulations against projects owned by the logged-in user.
+  const project = await findOwnedProject(projectId, user.id);
+  if (!project) {
+    return new Response(
+      JSON.stringify({ message: "Project not found or access denied" }),
+      {
+        status: 404,
+        headers: { "Content-Type": "application/json" },
+      },
+    );
+  }
+
+  let safeEndpoint: string;
+  try {
+    safeEndpoint = await assertSafeHttpUrl(endpoint);
+  } catch (err) {
+    const message =
+      err instanceof UnsafeUrlError
+        ? err.message
+        : "Invalid or unsafe endpoint URL";
+    return new Response(JSON.stringify({ message }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
   const rateLimit = await checkRateLimit(user.id, user.isPaid);
@@ -64,7 +92,7 @@ export async function GET(req: Request) {
 
         sendEvent("status", { message: "Sending request..." });
 
-        const simulation = await runRealSimulation(projectId, endpoint);
+        const simulation = await runRealSimulation(project.id, safeEndpoint);
 
         sendEvent("latency", {
           value: Math.round(simulation.avgLatency ?? simulation.latency ?? 0),

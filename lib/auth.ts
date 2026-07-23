@@ -18,6 +18,16 @@ type AppSessionUser = {
   isPaid?: boolean;
 };
 
+/** Admin emails from ADMIN_EMAILS / ADMIN_EMAIL (comma-separated). No hardcoded addresses. */
+function isConfiguredAdminEmail(email: string): boolean {
+  const raw = process.env.ADMIN_EMAILS ?? process.env.ADMIN_EMAIL ?? "";
+  const allowed = raw
+    .split(",")
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean);
+  return allowed.includes(email.trim().toLowerCase());
+}
+
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma) as Adapter,
   session: {
@@ -58,9 +68,13 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
+        // Admin = DB flag OR email listed in ADMIN_EMAIL / ADMIN_EMAILS env.
+        // Never hardcode personal emails in source code.
         const isAdmin =
-          user.email === "bharathisenthilkumar28@gmail.com" || user.isAdmin;
+          user.isAdmin || isConfiguredAdminEmail(user.email);
 
+        // If they match the env allowlist, persist isAdmin in the database
+        // so later logins work even if env changes temporarily.
         if (isAdmin && !user.isAdmin) {
           await prisma.user.update({
             where: { id: user.id },
