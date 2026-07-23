@@ -8,32 +8,33 @@ import { redisClient } from "@/lib/redis";
 import { createHash } from "crypto";
 import { assertSafeHttpUrl, UnsafeUrlError } from "@/lib/urlSafety";
 import { findOwnedProject } from "@/lib/projectAccess";
+import { runRealSimulation } from "@/lib/simulator";
+import { parseProbeOptions } from "@/lib/probeOptions";
 
 function simulationCacheKey(
   userId: string,
   projectId: string,
   endpoint: string,
+  method: string,
+  concurrency: number,
 ) {
   const endpointHash = createHash("sha256")
-    .update(endpoint)
+    .update(`${method}:${concurrency}:${endpoint}`)
     .digest("hex")
     .slice(0, 20);
-  return `simulation:v1:user:${userId}:project:${projectId}:endpoint:${endpointHash}`;
+  return `simulation:v2:user:${userId}:project:${projectId}:endpoint:${endpointHash}`;
 }
 
 export async function POST(req: Request) {
   try {
     let user = null;
 
-    // 1. Check for API Key in Authorization header (Bearer token)
     const authHeader = req.headers.get("authorization");
     if (authHeader && authHeader.startsWith("Bearer ")) {
       const apiKeyValue = authHeader.substring(7);
-
       user = await prisma.user.findUnique({ where: { apiKey: apiKeyValue } });
     }
 
-    // 2. Fallback to Session Auth if no valid API key found
     if (!user) {
       const session = await getServerSession(authOptions);
       if (session?.user?.email) {
@@ -54,7 +55,6 @@ export async function POST(req: Request) {
       );
     }
 
-    // Rate Limiting
     const rateLimit = await checkRateLimit(user.id, user.isPaid);
     if (!rateLimit.success) {
       await logApiRequest({
@@ -82,7 +82,8 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
-    const { projectId, endpoint } = body;
+    const { projectId, endpoint, method, concurrency, headers, body: requestBody } =
+      body;
 
     if (!projectId || !endpoint) {
       await logApiRequest({
@@ -101,7 +102,6 @@ export async function POST(req: Request) {
       );
     }
 
-    // Only allow simulations against projects owned by this user.
     const project = await findOwnedProject(projectId, user.id);
     if (!project) {
       await logApiRequest({
@@ -120,6 +120,23 @@ export async function POST(req: Request) {
       );
     }
 
+    const probeParsed = parseProbeOptions({
+      method,
+      concurrency,
+      headers,
+      body: requestBody,
+    });
+    if (!probeParsed.ok) {
+      return NextResponse.json(
+        {
+          status: 400,
+          errorType: "validation_error",
+          message: probeParsed.error,
+        },
+        { status: 400 },
+      );
+    }
+
     let safeEndpoint: string;
     try {
       safeEndpoint = await assertSafeHttpUrl(endpoint);
@@ -128,12 +145,6 @@ export async function POST(req: Request) {
         err instanceof UnsafeUrlError
           ? err.message
           : "Invalid or unsafe endpoint URL";
-      await logApiRequest({
-        userId: user.id,
-        endpoint: "simulate",
-        status: 400,
-        latency: 0,
-      });
       return NextResponse.json(
         {
           status: 400,
@@ -144,12 +155,25 @@ export async function POST(req: Request) {
       );
     }
 
-    const cacheKey = simulationCacheKey(user.id, project.id, safeEndpoint);
-    if (redisClient.isAvailable) {
+    const cacheKey = simulationCacheKey(
+      user.id,
+      project.id,
+      safeEndpoint,
+      probeParsed.options.method,
+      probeParsed.options.concurrency,
+    );
+
+    // Skip cache for customized headers/body — results should reflect live config.
+    const canUseCache =
+      Object.keys(probeParsed.options.headers).length === 0 &&
+      !probeParsed.options.body;
+
+    if (canUseCache && redisClient.isAvailable) {
       const cached = await redisClient.get<{
         latency: number;
         status: string;
         ai: unknown;
+        loadMetrics: unknown;
       }>(cacheKey);
 
       if (cached) {
@@ -180,35 +204,45 @@ export async function POST(req: Request) {
 
         return NextResponse.json({
           ...simulation,
-          latency: simulation.latency,
-          status: simulation.status,
           ai: cached.ai,
+          loadMetrics: cached.loadMetrics,
           cached: true,
         });
       }
     }
 
-    // Enqueue a background job for the simulation and return 202.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const job = await (prisma as any).job.create({
-      data: {
-        type: "simulation",
-        payload: {
-          projectId: project.id,
-          endpoint: safeEndpoint,
-          userId: user.id,
-        },
-      },
+    // Run the probe now (no background Job queue).
+    const simulation = await runRealSimulation(project.id, safeEndpoint, {
+      method: probeParsed.options.method,
+      concurrency: probeParsed.options.concurrency,
+      headers: probeParsed.options.headers,
+      body: probeParsed.options.body,
     });
 
-    // Invalidate user projects cache so UI can reflect upcoming results
-    if (redisClient.isAvailable) {
+    if (canUseCache && redisClient.isAvailable) {
+      await redisClient.set(
+        cacheKey,
+        {
+          latency: simulation.avgLatency,
+          status: simulation.status,
+          ai: simulation.ai,
+          loadMetrics: simulation.loadMetrics,
+        },
+        60,
+      );
+      await redisClient.del(`user_projects:${user.id}`);
+    } else if (redisClient.isAvailable) {
       await redisClient.del(`user_projects:${user.id}`);
     }
 
-    await logApiRequest({ userId: user.id, endpoint: "simulate:enqueued", status: 202, latency: 0 });
+    await logApiRequest({
+      userId: user.id,
+      endpoint: "simulate",
+      status: 200,
+      latency: simulation.latency,
+    });
 
-    return NextResponse.json({ jobId: job.id, status: "ENQUEUED" }, { status: 202 });
+    return NextResponse.json(simulation);
   } catch (error) {
     console.error("Simulation error:", error);
     const detail = error instanceof Error ? error.message : "Unknown error";

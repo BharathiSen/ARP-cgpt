@@ -5,7 +5,7 @@ export const features = [
   {
     title: "Live Endpoint Probes",
     description:
-      "Send a real HTTP request to your public API and measure whether it succeeds and how long it takes.",
+      "Send real HTTP GET or POST requests to your public API — from a single probe up to 20 concurrent requests — and measure success, latency, and error rate.",
     icon: Activity,
     gradient: "from-[#00C8FF] to-[#4DEBFF]",
   },
@@ -26,7 +26,7 @@ export const features = [
   {
     title: "History & Metrics",
     description:
-      "Keep per-project run history, charts, summaries, and exportable JSON reports for later review.",
+      "Keep per-project run history with honest p50/p95 latency and error-rate metrics, charts, summaries, and exportable JSON reports.",
     icon: BarChart3,
     gradient: "from-[#00C8FF] to-[#4DEBFF]",
   },

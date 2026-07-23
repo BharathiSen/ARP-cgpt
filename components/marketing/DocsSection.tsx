@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/Button";
 const DEMO_CURL = `curl -X POST https://arp-cgpt.vercel.app/api/simulate \\
   -H "Authorization: Bearer YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
-  -d '{"projectId":"YOUR_PROJECT_ID","endpoint":"https://httpbin.org/get"}'`;
+  -d '{"projectId":"YOUR_PROJECT_ID","endpoint":"https://httpbin.org/get","method":"GET","concurrency":5}'`;
 
 export default function DocsSection() {
   const [copied, setCopied] = useState(false);
@@ -159,8 +159,18 @@ export default function DocsSection() {
             <span style={{ color: "#00C8FF" }}>&quot;endpoint&quot;</span>
             <span style={{ color: "#9AA6C4" }}>: </span>
             <span style={{ color: "#4DEBFF" }}>
-              &quot;https://httpbin.org/get&quot;{"\n"}
+              &quot;https://httpbin.org/get&quot;
             </span>
+            <span style={{ color: "#9AA6C4" }}>,{"\n"}</span>
+            {"    "}
+            <span style={{ color: "#00C8FF" }}>&quot;method&quot;</span>
+            <span style={{ color: "#9AA6C4" }}>: </span>
+            <span style={{ color: "#4DEBFF" }}>&quot;GET&quot;</span>
+            <span style={{ color: "#9AA6C4" }}>,{"\n"}</span>
+            {"    "}
+            <span style={{ color: "#00C8FF" }}>&quot;concurrency&quot;</span>
+            <span style={{ color: "#9AA6C4" }}>: </span>
+            <span style={{ color: "#4DEBFF" }}>5{"\n"}</span>
             {"  "}
             <span style={{ color: "#fff" }}>{"}"}&apos;</span>
           </pre>

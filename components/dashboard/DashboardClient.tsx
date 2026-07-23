@@ -1,102 +1,63 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { useSession, signOut } from "next-auth/react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
-import {
-  Plus,
-  Play,
-  Activity,
-  Database,
-  CheckCircle,
-  XCircle,
-  LogOut,
-  Loader2,
-  Sparkles,
-  Zap,
-  Key,
-  Download,
-  Eye,
-  EyeOff,
-} from "lucide-react";
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-} from "recharts";
-import { Button } from "@/components/ui/Button";
+import { Activity, Loader2 } from "lucide-react";
 import { toast } from "react-hot-toast";
+import { DashboardHeader } from "./DashboardHeader";
+import { ProjectsPanel } from "./ProjectsPanel";
+import { ProbeRunnerPanel } from "./ProbeRunnerPanel";
+import { HistoryChartsPanel } from "./HistoryChartsPanel";
+import { AiSummaryPanel } from "./AiSummaryPanel";
+import { ApiKeyPanel } from "./ApiKeyPanel";
+import type {
+  FetchProjectsOptions,
+  HttpMethod,
+  LoadMetrics,
+  Project,
+  ProjectSummary,
+  RedisObservability,
+  Simulation,
+} from "./types";
+import {
+  getSimulationAI,
+  readJsonSafe,
+  getErrorMessage,
+  normalizeProject,
+  getProjectNameKey,
+  mergeProjectIntoList,
+} from "./simulationHelpers";
 
-// Add simple interfaces for data models
-// ... (rest of imports keep unchanged below)
-interface Simulation {
-  id: string;
-  endpoint: string;
-  status: string;
-  avgLatency: number;
-  latency?: number;
-  insight?: string;
-  confidenceScore?: number;
-  riskLevel?: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
-  insights?: string[];
-  recommendedActions?: string[];
-  suggestions?: string[];
-  anomalies?: string[];
-  ai?: {
-    confidenceScore: number;
-    riskLevel: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
-    insights: string[];
-    recommendedActions: string[];
-    suggestions?: string[];
-    anomalies: string[];
-    reasoning?: string;
-    signalsUsed?: string[];
-    confidence?: number;
-    rootCause?: string;
-    suggestion?: string;
+const HTTPBIN_GET = "https://httpbin.org/get";
+const HTTPBIN_POST = "https://httpbin.org/post";
+
+function buildProbePayload(
+  projectId: string,
+  endpoint: string,
+  method: HttpMethod,
+  concurrency: number,
+  headerKey: string,
+  headerValue: string,
+  requestBody: string,
+) {
+  const payload: Record<string, unknown> = {
+    projectId,
+    endpoint,
+    method,
+    concurrency: String(concurrency),
   };
-  createdAt: string;
-}
 
-interface ProjectSummary {
-  overallHealth: string;
-  majorRisks: string[];
-  recommendedActions: string[];
-  recommendations?: string[];
-}
+  if (headerKey.trim() && headerValue.trim()) {
+    payload.headers = JSON.stringify({ [headerKey.trim()]: headerValue.trim() });
+  }
 
-interface Project {
-  id: string;
-  name: string;
-  simulations?: Simulation[];
-}
+  if (method === "POST" && requestBody.trim()) {
+    payload.body = requestBody;
+  }
 
-interface ApiErrorResponse {
-  error?: string;
-  message?: string;
+  return payload;
 }
-
-interface RedisObservability {
-  cache_hit_rate: number;
-  rate_limit_blocked: number;
-  redis: {
-    connected: boolean;
-    provider: "upstash" | "local";
-    latency: number;
-  };
-}
-
-type FetchProjectsOptions = {
-  ensureProject?: Project;
-  selectProjectId?: string;
-};
 
 export default function DashboardClient({
   user,
@@ -115,34 +76,33 @@ export default function DashboardClient({
   const [newProjectName, setNewProjectName] = useState("");
   const [isCreating, setIsCreating] = useState(false);
 
-  // Simulation form — httpbin.org is a public test API that always works for demos
-  const [endpoint, setEndpoint] = useState("https://httpbin.org/get");
+  const [endpoint, setEndpoint] = useState(HTTPBIN_GET);
+  const [method, setMethod] = useState<HttpMethod>("GET");
+  const [concurrency, setConcurrency] = useState(1);
+  const [headerKey, setHeaderKey] = useState("");
+  const [headerValue, setHeaderValue] = useState("");
+  const [requestBody, setRequestBody] = useState("");
   const [isSimulating, setIsSimulating] = useState(false);
   const [simulationResult, setSimulationResult] = useState<Simulation | null>(
     null,
   );
-
-  // Real-time animation states
   const [simulationProgress, setSimulationProgress] = useState(0);
   const [liveLatency, setLiveLatency] = useState(0);
+  const [liveLoadMetrics, setLiveLoadMetrics] =
+    useState<Partial<LoadMetrics> | null>(null);
   const [statusMessage, setStatusMessage] = useState("");
   const eventSourceRef = useRef<EventSource | null>(null);
 
-  // --- FEATURE 2: AI TEST GENERATOR STATES ---
   const [aiPrompt, setAiPrompt] = useState("");
   const [isAIGenerating, setIsAIGenerating] = useState(false);
   const [generatedConfig, setGeneratedConfig] = useState<{
-    failureRate: number;
-    latencySpikes: number;
     concurrency: number;
     description: string;
   } | null>(null);
 
-  // --- FEATURE 3: AI SUMMARY STATE ---
   const [aiSummary, setAiSummary] = useState<ProjectSummary | null>(null);
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
 
-  // --- FEATURE: API KEY ---
   const [apiKey, setApiKey] = useState<string | null>(null);
   const [isApiKeyLoading, setIsApiKeyLoading] = useState(false);
   const [newlyGeneratedKey, setNewlyGeneratedKey] = useState<string | null>(
@@ -154,258 +114,72 @@ export default function DashboardClient({
   );
   const [projectMenuOpen, setProjectMenuOpen] = useState<string | null>(null);
 
-  const maskApiKey = (key: string) => {
-    if (!key) return "";
-    return key.slice(0, 12) + "**************" + key.slice(-6);
-  };
-
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     toast.success("API Key copied to clipboard!");
   };
 
-  const getSimulationAI = (sim: Simulation) => {
-    if (sim.ai) return sim.ai;
-
-    if (sim.insight) {
+  const fetchProjects = useCallback(
+    async (options: FetchProjectsOptions = {}) => {
       try {
-        const legacy = JSON.parse(sim.insight) as {
-          confidence?: number;
-          rootCause?: string;
-          suggestion?: string;
-          confidenceScore?: number;
-          riskLevel?: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
-          insights?: string[];
-          recommendedActions?: string[];
-          suggestions?: string[];
-          anomalies?: string[];
-          reasoning?: string;
-          signalsUsed?: string[];
-        };
+        const res = await fetch("/api/projects");
+        const data = await readJsonSafe(res);
 
-        const confidenceScore = Math.round(
-          legacy.confidenceScore ?? legacy.confidence ?? 0,
-        );
-
-        return {
-          confidenceScore,
-          riskLevel: legacy.riskLevel ?? "MEDIUM",
-          insights:
-            legacy.insights ?? (legacy.rootCause ? [legacy.rootCause] : []),
-          recommendedActions:
-            legacy.recommendedActions ??
-            legacy.suggestions ??
-            (legacy.suggestion ? [legacy.suggestion] : []),
-          suggestions:
-            legacy.suggestions ??
-            (legacy.suggestion ? [legacy.suggestion] : []),
-          anomalies: legacy.anomalies ?? [],
-          reasoning: legacy.reasoning,
-          signalsUsed: legacy.signalsUsed,
-          confidence: legacy.confidence,
-          rootCause: legacy.rootCause,
-          suggestion: legacy.suggestion,
-        };
-      } catch {
-        return null;
-      }
-    }
-
-    if (
-      sim.insights ||
-      sim.recommendedActions ||
-      sim.suggestions ||
-      sim.anomalies
-    ) {
-      return {
-        confidenceScore: Math.round(sim.confidenceScore ?? 0),
-        riskLevel: sim.riskLevel ?? "MEDIUM",
-        insights: sim.insights ?? [],
-        recommendedActions: sim.recommendedActions ?? sim.suggestions ?? [],
-        suggestions: sim.suggestions ?? [],
-        anomalies: sim.anomalies ?? [],
-        reasoning: undefined,
-        signalsUsed: undefined,
-      };
-    }
-
-    return null;
-  };
-
-  const getRiskStyle = (risk: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL") => {
-    if (risk === "LOW")
-      return {
-        color: "#00C8FF",
-        border: "1px solid rgba(0,200,255,0.35)",
-        background: "rgba(0,200,255,0.12)",
-      };
-    if (risk === "MEDIUM")
-      return {
-        color: "#f59e0b",
-        border: "1px solid rgba(245,158,11,0.35)",
-        background: "rgba(245,158,11,0.12)",
-      };
-    if (risk === "HIGH")
-      return {
-        color: "#fb7185",
-        border: "1px solid rgba(251,113,133,0.35)",
-        background: "rgba(251,113,133,0.12)",
-      };
-    return {
-      color: "#ef4444",
-      border: "1px solid rgba(239,68,68,0.4)",
-      background: "rgba(239,68,68,0.12)",
-    };
-  };
-
-  const getActionPriority = (
-    action: string,
-    riskLevel?: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL",
-  ) => {
-    const text = action.toLowerCase();
-    if (
-      text.includes("immediate") ||
-      text.includes("critical") ||
-      text.includes("urgent") ||
-      riskLevel === "CRITICAL" ||
-      riskLevel === "HIGH"
-    ) {
-      return "HIGH";
-    }
-    if (
-      text.includes("monitor") ||
-      text.includes("consider") ||
-      text.includes("optimize") ||
-      riskLevel === "MEDIUM"
-    ) {
-      return "MEDIUM";
-    }
-    return "LOW";
-  };
-
-  const getPriorityStyle = (priority: "HIGH" | "MEDIUM" | "LOW") => {
-    if (priority === "HIGH")
-      return {
-        color: "#ff8a8a",
-        borderColor: "rgba(239,68,68,0.4)",
-        background: "rgba(239,68,68,0.1)",
-      };
-    if (priority === "MEDIUM")
-      return {
-        color: "#fbbf24",
-        borderColor: "rgba(245,158,11,0.4)",
-        background: "rgba(245,158,11,0.1)",
-      };
-    return {
-      color: "#86e9ff",
-      borderColor: "rgba(0,200,255,0.35)",
-      background: "rgba(0,200,255,0.08)",
-    };
-  };
-
-  const readJsonSafe = async (res: Response) => {
-    const text = await res.text();
-    if (!text) return null;
-
-    try {
-      return JSON.parse(text) as unknown;
-    } catch {
-      return null;
-    }
-  };
-
-  const getErrorMessage = (data: unknown, fallback: string) => {
-    if (data && typeof data === "object" && "error" in data) {
-      const { error } = data as ApiErrorResponse;
-      if (typeof error === "string" && error) return error;
-    }
-
-    return fallback;
-  };
-
-  const isProject = (value: unknown): value is Project =>
-    Boolean(
-      value &&
-        typeof value === "object" &&
-        "id" in value &&
-        typeof value.id === "string" &&
-        "name" in value &&
-        typeof value.name === "string",
-    );
-
-  const normalizeProject = (value: unknown): Project | null => {
-    if (!isProject(value)) return null;
-
-    return {
-      ...value,
-      simulations: Array.isArray(value.simulations) ? value.simulations : [],
-    };
-  };
-
-  const getProjectNameKey = (name: string) => name.trim().toLowerCase();
-
-  const mergeProjectIntoList = (list: Project[], project: Project) => [
-    project,
-    ...list.filter(
-      (item) =>
-        item.id !== project.id &&
-        getProjectNameKey(item.name) !== getProjectNameKey(project.name),
-    ),
-  ];
-
-  const fetchProjects = async (options: FetchProjectsOptions = {}) => {
-    try {
-      const res = await fetch("/api/projects");
-      const data = await readJsonSafe(res);
-
-      if (!res.ok) {
-        const message =
-          data &&
-          typeof data === "object" &&
-          "error" in data &&
-          typeof data.error === "string"
-            ? data.error
-            : "Failed to load projects.";
-        toast.error(message);
-        return;
-      }
-
-      if (Array.isArray(data)) {
-        let normalized = data
-          .map(normalizeProject)
-          .filter((project): project is Project => Boolean(project));
-
-        if (
-          options.ensureProject &&
-          !normalized.some((project) => project.id === options.ensureProject?.id)
-        ) {
-          normalized = mergeProjectIntoList(normalized, options.ensureProject);
+        if (!res.ok) {
+          const message =
+            data &&
+            typeof data === "object" &&
+            "error" in data &&
+            typeof data.error === "string"
+              ? data.error
+              : "Failed to load projects.";
+          toast.error(message);
+          return;
         }
 
-        setProjects(normalized);
-        setSelectedProject((current) => {
-          if (!normalized.length) return null;
-          if (options.selectProjectId) {
-            return (
-              normalized.find((p) => p.id === options.selectProjectId) ??
-              options.ensureProject ??
-              normalized[0]
+        if (Array.isArray(data)) {
+          let normalized = data
+            .map(normalizeProject)
+            .filter((project): project is Project => Boolean(project));
+
+          if (
+            options.ensureProject &&
+            !normalized.some(
+              (project) => project.id === options.ensureProject?.id,
+            )
+          ) {
+            normalized = mergeProjectIntoList(
+              normalized,
+              options.ensureProject,
             );
           }
-          if (!current) return normalized[0];
 
-          const refreshedCurrent = normalized.find((p) => p.id === current.id);
-          return refreshedCurrent ?? normalized[0];
-        });
-        return normalized;
+          setProjects(normalized);
+          setSelectedProject((current) => {
+            if (!normalized.length) return null;
+            if (options.selectProjectId) {
+              return (
+                normalized.find((p) => p.id === options.selectProjectId) ??
+                options.ensureProject ??
+                normalized[0]
+              );
+            }
+            if (!current) return normalized[0];
+
+            const refreshedCurrent = normalized.find((p) => p.id === current.id);
+            return refreshedCurrent ?? normalized[0];
+          });
+          return normalized;
+        }
+      } catch (error) {
+        console.error("Failed to fetch projects", error);
+        toast.error("Network error while loading projects.");
       }
-    } catch (error) {
-      console.error("Failed to fetch projects", error);
-      toast.error("Network error while loading projects.");
-    }
 
-    return null;
-  };
+      return null;
+    },
+    [],
+  );
 
   const fetchApiKey = async () => {
     try {
@@ -440,11 +214,9 @@ export default function DashboardClient({
       if (res.ok && data.apiKey) {
         setApiKey(data.apiKey);
         setNewlyGeneratedKey(data.apiKey);
-        // Keep the key masked by default after generation.
         setIsApiKeyVisible(false);
         toast.success("API Key generated successfully!");
 
-        // Auto-download file
         const blob = new Blob(
           [
             `API Reliability Lab API Key\n\nYour Secret Key:\n${data.apiKey}\n\nKeep this key secure. Do not share it.`,
@@ -454,14 +226,14 @@ export default function DashboardClient({
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = `api-reliability-lab-api-key.txt`;
+        a.download = "api-reliability-lab-api-key.txt";
         document.body.appendChild(a);
         a.click();
         window.URL.revokeObjectURL(url);
       } else {
         toast.error(data.error || "Failed to generate API key");
       }
-    } catch (e) {
+    } catch {
       toast.error("Error connecting to server.");
     } finally {
       setIsApiKeyLoading(false);
@@ -504,13 +276,11 @@ export default function DashboardClient({
       fetchProjects();
       fetchApiKey();
       fetchObservability();
-      // Read prompt from URL if present
       if (typeof window !== "undefined") {
         const urlParams = new URLSearchParams(window.location.search);
         const promptParams = urlParams.get("prompt");
         if (promptParams) {
           setAiPrompt(promptParams);
-          // Set timeout to wait for projects to load, then we could auto-click, but just filling it is enough for UX.
           setTimeout(() => {
             const btn = document.getElementById("ai-generate-btn");
             if (btn) btn.click();
@@ -518,18 +288,24 @@ export default function DashboardClient({
         }
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status]);
+  }, [status, router, fetchProjects]);
 
   useEffect(() => {
     if (status !== "authenticated") return;
     const id = setInterval(() => {
       fetchObservability();
     }, 15000);
-
     return () => clearInterval(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
+
+  const handleMethodChange = (nextMethod: HttpMethod) => {
+    setMethod(nextMethod);
+    if (nextMethod === "POST" && endpoint === HTTPBIN_GET) {
+      setEndpoint(HTTPBIN_POST);
+    } else if (nextMethod === "GET" && endpoint === HTTPBIN_POST) {
+      setEndpoint(HTTPBIN_GET);
+    }
+  };
 
   const createProject = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -570,15 +346,15 @@ export default function DashboardClient({
       const createdProject = normalizeProject(data);
 
       if (!createdProject) {
-        toast.error("Project created, but response was invalid. Refreshing list...");
+        toast.error(
+          "Project created, but response was invalid. Refreshing list...",
+        );
         setNewProjectName("");
         await fetchProjects();
         return;
       }
 
-      setProjects((prev) => {
-        return mergeProjectIntoList(prev, createdProject);
-      });
+      setProjects((prev) => mergeProjectIntoList(prev, createdProject));
       setSelectedProject(createdProject);
       setNewProjectName("");
       toast.success("Project created successfully.");
@@ -588,9 +364,6 @@ export default function DashboardClient({
         selectProjectId: createdProject.id,
       });
 
-      // Cross-validate: ensure server didn't create a conflicting project
-      // (protects against race conditions where another project with same
-      // name was created concurrently on the server).
       try {
         const res2 = await fetch("/api/projects");
         const serverData = await readJsonSafe(res2);
@@ -601,14 +374,16 @@ export default function DashboardClient({
           const sameName = serverProjects.filter(
             (project) =>
               getProjectNameKey(project.name) ===
-                getProjectNameKey(createdProject.name),
+              getProjectNameKey(createdProject.name),
           );
 
           if (sameName.length > 1) {
-            // Conflict detected: remove optimistic insert and refresh list
-            setProjects((prev) => prev.filter((p) => p.id !== createdProject.id));
+            setProjects((prev) =>
+              prev.filter((p) => p.id !== createdProject.id),
+            );
             setSelectedProject((current) => {
-              if (current?.id === createdProject.id) return serverProjects[0] ?? null;
+              if (current?.id === createdProject.id)
+                return serverProjects[0] ?? null;
               return current;
             });
             toast.error(
@@ -619,7 +394,6 @@ export default function DashboardClient({
           }
         }
       } catch (e) {
-        // If cross-validation fails, we don't want to remove the optimistic project.
         console.warn("Cross-validation of created project failed", e);
       }
     } catch (error) {
@@ -630,8 +404,94 @@ export default function DashboardClient({
     }
   };
 
+  const handleRenameProject = async (project: Project) => {
+    setProjectMenuOpen(null);
+    const newName = window.prompt("Rename project:", project.name);
+    if (!newName) return;
+    const trimmed = newName.trim();
+    if (!trimmed) {
+      toast.error("Project name cannot be empty.");
+      return;
+    }
+    const renamedProjectNameKey = getProjectNameKey(trimmed);
+    if (
+      projects.some(
+        (pr) =>
+          pr.id !== project.id &&
+          getProjectNameKey(pr.name) === renamedProjectNameKey,
+      )
+    ) {
+      toast.error("A project with this name already exists.");
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/projects", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: project.id, name: trimmed }),
+      });
+      const data = await readJsonSafe(res);
+      if (!res.ok) {
+        toast.error(getErrorMessage(data, "Failed to rename project."));
+        return;
+      }
+      setProjects((prev) =>
+        prev.map((pr) => (pr.id === project.id ? { ...pr, name: trimmed } : pr)),
+      );
+      setSelectedProject((cur) =>
+        cur && cur.id === project.id ? { ...cur, name: trimmed } : cur,
+      );
+      toast.success("Project renamed.");
+    } catch (e) {
+      console.error(e);
+      toast.error("Network error while renaming project.");
+    }
+  };
+
+  const handleDeleteProject = async (project: Project) => {
+    setProjectMenuOpen(null);
+    const ok = window.confirm(
+      `Delete project "${project.name}"? This cannot be undone.`,
+    );
+    if (!ok) return;
+
+    const before = projects;
+    setProjects((prev) => prev.filter((pr) => pr.id !== project.id));
+    if (selectedProject?.id === project.id) setSelectedProject(null);
+
+    try {
+      const res = await fetch("/api/projects", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: project.id }),
+      });
+      const data = await readJsonSafe(res);
+      if (!res.ok) {
+        toast.error(getErrorMessage(data, "Failed to delete project."));
+        setProjects(before);
+        return;
+      }
+      toast.success("Project deleted.");
+    } catch (e) {
+      console.error(e);
+      toast.error("Network error while deleting project.");
+      setProjects(before);
+    }
+  };
+
   const runSimulation = async () => {
     if (!selectedProject) return;
+
+    const probePayload = buildProbePayload(
+      selectedProject.id,
+      endpoint,
+      method,
+      concurrency,
+      headerKey,
+      headerValue,
+      requestBody,
+    );
 
     const runSimulationFallback = async () => {
       try {
@@ -639,7 +499,7 @@ export default function DashboardClient({
         const res = await fetch("/api/simulate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ projectId: selectedProject.id, endpoint }),
+          body: JSON.stringify(probePayload),
         });
         const data = await readJsonSafe(res);
 
@@ -665,13 +525,18 @@ export default function DashboardClient({
 
         setSimulationProgress(100);
         if (data && typeof data === "object") {
-          setSimulationResult(data as Simulation);
+          const result = data as Simulation;
+          setSimulationResult(result);
+          const metrics = result.loadMetrics ?? result.ai?.loadMetrics;
+          if (metrics) {
+            setLiveLoadMetrics(metrics);
+          }
         }
         setIsSimulating(false);
         setStatusMessage("Simulation completed.");
         toast.success("Simulation completed successfully!");
         fetchProjects();
-      } catch (_e: unknown) {
+      } catch {
         setIsSimulating(false);
         setStatusMessage("Simulation failed.");
         toast.error("Network error during simulation.");
@@ -687,16 +552,24 @@ export default function DashboardClient({
     setSimulationResult(null);
     setSimulationProgress(0);
     setLiveLatency(0);
+    setLiveLoadMetrics(null);
     setStatusMessage("Initializing simulation...");
 
     const params = new URLSearchParams({
-      projectId: selectedProject.id,
-      endpoint,
-      failureRate: String(generatedConfig?.failureRate ?? 0),
-      latency: String(generatedConfig?.latencySpikes ?? 0),
+      projectId: probePayload.projectId as string,
+      endpoint: probePayload.endpoint as string,
+      method: probePayload.method as string,
+      concurrency: probePayload.concurrency as string,
     });
-    const streamUrl = `/api/simulate/stream?${params.toString()}`;
 
+    if (probePayload.headers) {
+      params.set("headers", probePayload.headers as string);
+    }
+    if (probePayload.body) {
+      params.set("body", probePayload.body as string);
+    }
+
+    const streamUrl = `/api/simulate/stream?${params.toString()}`;
     let completed = false;
 
     try {
@@ -720,9 +593,25 @@ export default function DashboardClient({
         try {
           const payload = JSON.parse((event as MessageEvent).data) as {
             value?: number;
+            p50?: number;
+            p95?: number;
+            errorRatePercent?: number;
+            concurrency?: number;
           };
           if (typeof payload.value === "number") {
             setLiveLatency(payload.value);
+          }
+          if (
+            payload.p50 != null ||
+            payload.p95 != null ||
+            payload.errorRatePercent != null
+          ) {
+            setLiveLoadMetrics({
+              p50Ms: payload.p50,
+              p95Ms: payload.p95,
+              errorRatePercent: payload.errorRatePercent,
+              concurrency: payload.concurrency ?? concurrency,
+            });
           }
         } catch {
           // Ignore malformed event payloads.
@@ -755,6 +644,11 @@ export default function DashboardClient({
           if (simulation) {
             setSimulationResult(simulation);
             setLiveLatency(Math.round(simulation.avgLatency ?? 0));
+            const metrics =
+              simulation.loadMetrics ?? simulation.ai?.loadMetrics;
+            if (metrics) {
+              setLiveLoadMetrics(metrics);
+            }
           }
           setStatusMessage("Simulation completed.");
           eventSource.close();
@@ -775,7 +669,7 @@ export default function DashboardClient({
         eventSourceRef.current = null;
         runSimulationFallback();
       });
-    } catch (_e: unknown) {
+    } catch {
       await runSimulationFallback();
     }
   };
@@ -789,37 +683,24 @@ export default function DashboardClient({
     };
   }, []);
 
-  // --- FEATURE 2: AI TEST GENERATOR LOGIC ---
   const handleAIGenerate = async () => {
     if (!aiPrompt.trim()) return;
     setIsAIGenerating(true);
     setGeneratedConfig(null);
 
-    // Simulate AI thinking and rule-based generation
     await new Promise((resolve) => setTimeout(resolve, 1500));
 
     const promptLower = aiPrompt.toLowerCase();
-    const config = {
-      failureRate:
-        promptLower.includes("heavy") || promptLower.includes("load") ? 35 : 5,
-      latencySpikes:
-        promptLower.includes("slow") || promptLower.includes("latency")
-          ? 800
-          : 120,
-      concurrency:
-        promptLower.includes("spike") || promptLower.includes("heavy")
-          ? 1000
-          : 50,
-      description: "",
-    };
+    const suggestedConcurrency =
+      promptLower.includes("spike") || promptLower.includes("heavy") ? 10 : 3;
 
-    config.description = `Suggested probe notes: try about ${config.concurrency} careful manual runs and watch for latency near ${config.latencySpikes}ms. (This helper does not inject failures — probes are real HTTP GETs.)`;
-
-    setGeneratedConfig(config);
+    setGeneratedConfig({
+      concurrency: suggestedConcurrency,
+      description: `Suggested probe notes: try about ${suggestedConcurrency} concurrent ${method} requests and watch latency trends. (This helper does not inject failures — probes are real HTTP requests.)`,
+    });
     setIsAIGenerating(false);
   };
 
-  // --- FEATURE 3: AI SUMMARY LOGIC ---
   useEffect(() => {
     if (
       selectedProject?.simulations &&
@@ -921,21 +802,18 @@ export default function DashboardClient({
   );
 
   const successCount =
-    selectedProject?.simulations?.filter(
-      (s: Simulation) => s.status === "SUCCESS",
-    ).length || 0;
+    selectedProject?.simulations?.filter((s) => s.status === "SUCCESS")
+      .length || 0;
   const failureCount =
-    selectedProject?.simulations?.filter(
-      (s: Simulation) => s.status === "FAILED",
-    ).length || 0;
+    selectedProject?.simulations?.filter((s) => s.status === "FAILED")
+      .length || 0;
 
   const pieData = [
     { name: "Success", value: successCount },
     { name: "Failure", value: failureCount },
   ];
-  const COLORS = ["#00C8FF", "#ff4d4d"];
 
-  if (status === "loading")
+  if (status === "loading") {
     return (
       <div
         className="min-h-screen flex items-center justify-center"
@@ -947,10 +825,10 @@ export default function DashboardClient({
         />
       </div>
     );
+  }
 
   return (
     <main className="min-h-screen" style={{ background: "var(--bg-base)" }}>
-      {/* Background Glow */}
       <div className="pointer-events-none fixed inset-0 -z-10">
         <div
           className="ds-glow-orb w-[800px] h-[600px] top-[-200px] right-[-200px]"
@@ -959,361 +837,51 @@ export default function DashboardClient({
       </div>
 
       <div className="pt-24 max-w-7xl mx-auto px-6 pb-16">
-        {/* Dashboard Header */}
-        <div className="flex items-center justify-between mb-10 pt-6">
-          <div>
-            <h1 className="text-3xl font-bold text-white tracking-tight">
-              Dashboard
-            </h1>
-            <p className="text-sm mt-1" style={{ color: "#9AA6C4" }}>
-              Welcome back,{" "}
-              <span style={{ color: "#00C8FF" }}>
-                {session?.user?.name || session?.user?.email}
-              </span>
-            </p>
-            <div className="mt-3 flex flex-wrap items-center gap-3">
-              <span
-                className="text-xs font-semibold px-3 py-1 rounded-full"
-                style={{
-                  color: "#00C8FF",
-                  background: "rgba(0,200,255,0.12)",
-                  border: "1px solid rgba(0,200,255,0.25)",
-                }}
-              >
-                {planLabel}
-              </span>
-              {!user?.isPaid && !user?.isAdmin && (
-                <a
-                  href="/pricing"
-                  className="text-xs underline"
-                  style={{ color: "#9AA6C4" }}
-                >
-                  Raise limits with Pro →
-                </a>
-              )}
-            </div>
-          </div>
-          <Button
-            variant="ghost"
-            onClick={() => signOut({ callbackUrl: "/" })}
-            className="text-sm px-4 py-2"
-          >
-            <LogOut className="w-4 h-4" /> Sign Out
-          </Button>
-        </div>
+        <DashboardHeader
+          userName={session?.user?.name || session?.user?.email}
+          planLabel={planLabel}
+          showUpgradeLink={!user?.isPaid && !user?.isAdmin}
+        />
 
         <div className="grid grid-cols-12 gap-6">
-          {/* ─── Sidebar: Projects ─────────────────────────── */}
           <div className="col-span-12 lg:col-span-4 space-y-4">
-            <div className="ds-card p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <Database className="w-4 h-4" style={{ color: "#00C8FF" }} />
-                <h2 className="font-bold text-white text-sm uppercase tracking-widest">
-                  Projects
-                </h2>
-              </div>
+            <ProjectsPanel
+              projects={projects}
+              selectedProject={selectedProject}
+              newProjectName={newProjectName}
+              isCreating={isCreating}
+              projectMenuOpen={projectMenuOpen}
+              onNewProjectNameChange={setNewProjectName}
+              onCreateProject={createProject}
+              onSelectProject={(p) => {
+                setSelectedProject(p);
+                setSimulationResult(null);
+                setLiveLoadMetrics(null);
+              }}
+              onToggleProjectMenu={(id) =>
+                setProjectMenuOpen((prev) => (prev === id ? null : id))
+              }
+              onRenameProject={handleRenameProject}
+              onDeleteProject={handleDeleteProject}
+            />
 
-              {/* New Project Form */}
-              <form onSubmit={createProject} className="flex gap-2 mb-5">
-                <input
-                  value={newProjectName}
-                  onChange={(e) => setNewProjectName(e.target.value)}
-                  placeholder="New project name…"
-                  className="ds-input text-sm py-2"
-                  disabled={isCreating}
-                  required
-                />
-                <Button
-                  type="submit"
-                  variant="custom"
-                  isLoading={isCreating}
-                  className="flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-lg transition-all"
-                  style={{
-                    background: "rgba(0,200,255,0.15)",
-                    border: "1px solid rgba(0,200,255,0.30)",
-                  }}
-                >
-                  {!isCreating && (
-                    <Plus className="w-5 h-5" style={{ color: "#00C8FF" }} />
-                  )}
-                </Button>
-              </form>
-
-              {/* Project List */}
-              <div className="space-y-2 max-h-[400px] overflow-y-auto no-scrollbar">
-                {projects.length === 0 && (
-                  <p
-                    className="text-center py-8 text-sm"
-                    style={{ color: "#9AA6C4" }}
-                  >
-                    No projects yet. Create one above.
-                  </p>
-                )}
-                {projects.map((p) => (
-                  <div key={p.id} className="relative">
-                    <button
-                      onClick={() => {
-                        setSelectedProject(p);
-                        setSimulationResult(null);
-                      }}
-                      className="w-full text-left px-4 py-3 rounded-xl border transition-all"
-                      style={
-                        selectedProject?.id === p.id
-                          ? {
-                              background: "rgba(0,200,255,0.12)",
-                              borderColor: "rgba(0,200,255,0.45)",
-                              color: "#fff",
-                            }
-                          : {
-                              background: "rgba(255,255,255,0.03)",
-                              borderColor: "rgba(0,200,255,0.10)",
-                              color: "#9AA6C4",
-                            }
-                      }
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="font-semibold text-sm text-white truncate">
-                            {p.name}
-                          </p>
-                          <p
-                            className="text-[11px] mt-0.5"
-                            style={{ color: "#9AA6C4" }}
-                          >
-                            {p.simulations?.length || 0} simulation
-                            {p.simulations?.length !== 1 ? "s" : ""}
-                          </p>
-                        </div>
-                        <div>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setProjectMenuOpen((prev) => (prev === p.id ? null : p.id));
-                            }}
-                            className="px-2 py-1 rounded text-sm text-[#9AA6C4] hover:text-white"
-                            aria-label="project actions"
-                          >
-                            •••
-                          </button>
-                        </div>
-                      </div>
-                    </button>
-
-                    {projectMenuOpen === p.id && (
-                      <div
-                        className="absolute right-2 top-3 z-20 bg-zinc-900 border rounded shadow-md"
-                        style={{ minWidth: 160 }}
-                      >
-                        <button
-                          className="w-full text-left px-3 py-2 text-sm text-[#9AA6C4] hover:bg-zinc-800"
-                          onClick={async (e) => {
-                            e.stopPropagation();
-                            setProjectMenuOpen(null);
-                            const newName = window.prompt("Rename project:", p.name);
-                            if (!newName) return;
-                            const trimmed = newName.trim();
-                            if (!trimmed) {
-                              toast.error("Project name cannot be empty.");
-                              return;
-                            }
-                            const renamedProjectNameKey = getProjectNameKey(trimmed);
-                            if (
-                              projects.some(
-                                (pr) =>
-                                  pr.id !== p.id &&
-                                  getProjectNameKey(pr.name) === renamedProjectNameKey,
-                              )
-                            ) {
-                              toast.error("A project with this name already exists.");
-                              return;
-                            }
-
-                            try {
-                              const res = await fetch("/api/projects", {
-                                method: "PUT",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ id: p.id, name: trimmed }),
-                              });
-                              const data = await readJsonSafe(res);
-                              if (!res.ok) {
-                                const msg = getErrorMessage(data, "Failed to rename project.");
-                                toast.error(msg);
-                                return;
-                              }
-                              // Update locally
-                              setProjects((prev) => prev.map((pr) => (pr.id === p.id ? { ...pr, name: trimmed } : pr)));
-                              setSelectedProject((cur) => (cur && cur.id === p.id ? { ...cur, name: trimmed } : cur));
-                              toast.success("Project renamed.");
-                            } catch (e) {
-                              console.error(e);
-                              toast.error("Network error while renaming project.");
-                            }
-                          }}
-                        >
-                          Rename
-                        </button>
-                        <button
-                          className="w-full text-left px-3 py-2 text-sm text-red-400 hover:bg-zinc-800"
-                          onClick={async (e) => {
-                            e.stopPropagation();
-                            setProjectMenuOpen(null);
-                            const ok = window.confirm(`Delete project "${p.name}"? This cannot be undone.`);
-                            if (!ok) return;
-                            // Optimistic remove
-                            const before = projects;
-                            setProjects((prev) => prev.filter((pr) => pr.id !== p.id));
-                            if (selectedProject?.id === p.id) setSelectedProject(null);
-                            try {
-                              const res = await fetch("/api/projects", {
-                                method: "DELETE",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ id: p.id }),
-                              });
-                              const data = await readJsonSafe(res);
-                              if (!res.ok) {
-                                toast.error(getErrorMessage(data, "Failed to delete project."));
-                                setProjects(before);
-                                return;
-                              }
-                              toast.success("Project deleted.");
-                            } catch (e) {
-                              console.error(e);
-                              toast.error("Network error while deleting project.");
-                              setProjects(before);
-                            }
-                          }}
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* API Settings & Export Card */}
-            <div className="ds-card p-6 mt-6">
-              <div className="flex items-center gap-2 mb-4">
-                <Key className="w-4 h-4" style={{ color: "#00C8FF" }} />
-                <h2 className="font-bold text-white text-sm uppercase tracking-widest">
-                  Developer API
-                </h2>
-              </div>
-                <p className="text-xs mb-4" style={{ color: "#9AA6C4" }}>
-                Use your API key to integrate API Reliability Lab directly into
-                your CI/CD pipelines.
-              </p>
-
-              <div className="space-y-3">
-                {apiKey ? (
-                  <div className="flex flex-col gap-2">
-                    {newlyGeneratedKey && (
-                      <p className="text-xs text-yellow-400 mb-1">
-                        Copy and store this key securely. You won&apos;t be able
-                        to see it again.
-                      </p>
-                    )}
-                    <div
-                      className="flex items-center justify-between p-3 rounded text-xs font-mono"
-                      style={{
-                        background: "rgba(8,18,35,0.6)",
-                        border: "1px solid rgba(0,200,255,0.2)",
-                        color: "#00C8FF",
-                      }}
-                    >
-                      <span className="truncate mr-2">
-                        {isApiKeyVisible ? apiKey : maskApiKey(apiKey)}
-                      </span>
-                      <button
-                        onClick={() => setIsApiKeyVisible(!isApiKeyVisible)}
-                        title={
-                          isApiKeyVisible ? "Hide API Key" : "Show API Key"
-                        }
-                        className="text-xs text-ds-muted hover:text-white transition-colors flex-shrink-0"
-                      >
-                        <span className="inline-flex items-center gap-1">
-                          {isApiKeyVisible ? (
-                            <EyeOff className="w-3.5 h-3.5" />
-                          ) : (
-                            <Eye className="w-3.5 h-3.5" />
-                          )}
-                          [{isApiKeyVisible ? "Hide" : "Show"}]
-                        </span>
-                      </button>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        onClick={() => copyToClipboard(apiKey)}
-                        variant="ghost"
-                        className="flex-1 text-xs py-1.5 border border-[#1e293b]"
-                      >
-                        Copy
-                      </Button>
-                      {newlyGeneratedKey ? (
-                        <Button
-                          onClick={() => {
-                            setIsApiKeyVisible(false);
-                            setNewlyGeneratedKey(null);
-                          }}
-                          variant="ghost"
-                          className="flex-1 text-xs py-1.5"
-                        >
-                          I&apos;ve saved it securely
-                        </Button>
-                      ) : (
-                        <Button
-                          onClick={handleGenerateApiKey}
-                          isLoading={isApiKeyLoading}
-                          variant="ghost"
-                          className="flex-1 text-xs py-1.5"
-                        >
-                          Regenerate Key
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                ) : (
-                  <Button
-                    onClick={handleGenerateApiKey}
-                    isLoading={isApiKeyLoading}
-                    variant="ghost"
-                    className="w-full text-sm py-2"
-                  >
-                    Generate Secret Key
-                  </Button>
-                )}
-              </div>
-
-              {selectedProject &&
-                selectedProject.simulations &&
-                selectedProject.simulations.length > 0 && (
-                  <div
-                    className="mt-6 pt-6"
-                    style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}
-                  >
-                    <div className="flex items-center gap-2 mb-4">
-                      <Download
-                        className="w-4 h-4"
-                        style={{ color: "#00C8FF" }}
-                      />
-                      <h2 className="font-bold text-white text-sm uppercase tracking-widest">
-                        Export Data
-                      </h2>
-                    </div>
-                    <Button
-                      onClick={handleExportReport}
-                      variant="ghost"
-                      className="w-full text-sm py-2"
-                    >
-                      Download JSON Report
-                    </Button>
-                  </div>
-                )}
-            </div>
+            <ApiKeyPanel
+              apiKey={apiKey}
+              newlyGeneratedKey={newlyGeneratedKey}
+              isApiKeyVisible={isApiKeyVisible}
+              isApiKeyLoading={isApiKeyLoading}
+              selectedProject={selectedProject}
+              onToggleVisibility={() => setIsApiKeyVisible((v) => !v)}
+              onCopyKey={copyToClipboard}
+              onGenerateKey={handleGenerateApiKey}
+              onDismissNewKey={() => {
+                setIsApiKeyVisible(false);
+                setNewlyGeneratedKey(null);
+              }}
+              onExportReport={handleExportReport}
+            />
           </div>
 
-          {/* ─── Main Panel ─────────────────────────────────── */}
           <div className="col-span-12 lg:col-span-8 space-y-5">
             {!selectedProject ? (
               <div className="ds-card p-20 flex flex-col items-center justify-center text-center">
@@ -1330,725 +898,52 @@ export default function DashboardClient({
               </div>
             ) : (
               <>
-                {/* ── Top System Health Summary ── */}
+                <ProbeRunnerPanel
+                  projectName={selectedProject.name}
+                  endpoint={endpoint}
+                  method={method}
+                  concurrency={concurrency}
+                  headerKey={headerKey}
+                  headerValue={headerValue}
+                  requestBody={requestBody}
+                  aiPrompt={aiPrompt}
+                  isAIGenerating={isAIGenerating}
+                  generatedConfig={generatedConfig}
+                  isSimulating={isSimulating}
+                  simulationProgress={simulationProgress}
+                  liveLatency={liveLatency}
+                  statusMessage={statusMessage}
+                  simulationResult={simulationResult}
+                  liveLoadMetrics={liveLoadMetrics}
+                  onEndpointChange={setEndpoint}
+                  onMethodChange={handleMethodChange}
+                  onConcurrencyChange={setConcurrency}
+                  onHeaderKeyChange={setHeaderKey}
+                  onHeaderValueChange={setHeaderValue}
+                  onRequestBodyChange={setRequestBody}
+                  onAiPromptChange={setAiPrompt}
+                  onAIGenerate={handleAIGenerate}
+                  onRunSimulation={runSimulation}
+                />
+
                 {selectedProject.simulations &&
-                  selectedProject.simulations.length > 0 &&
-                  (() => {
-                    const sims = selectedProject.simulations;
-                    const fails = sims.filter((s) => s.status === "FAILED");
-                    const failRate = Math.round(
-                      (fails.length / sims.length) * 100,
-                    );
-                    const latencies = sims
-                      .map((s) => s.avgLatency)
-                      .sort((a, b) => a - b);
-                    const p95Idx = Math.floor(latencies.length * 0.95);
-                    const p95 = latencies.length > 0 ? latencies[p95Idx] : 0;
-                    const lastIncident =
-                      fails.length > 0
-                        ? new Date(fails[0].createdAt).toLocaleTimeString([], {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })
-                        : "None recently";
-
-                    let statusColor = "#00C8FF";
-                    let statusText = "Healthy";
-                    if (failRate > 20) {
-                      statusColor = "#ff4d4d";
-                      statusText = "Critical";
-                    } else if (failRate > 5 || p95 > 800) {
-                      statusColor = "#f59e0b";
-                      statusText = "Degraded";
-                    }
-
-                    return (
-                      <div className="ds-card p-5 flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                          <div
-                            className="relative flex items-center justify-center w-12 h-12 rounded-full"
-                            style={{ background: `${statusColor}15` }}
-                          >
-                            <Activity
-                              className="w-6 h-6"
-                              style={{ color: statusColor }}
-                            />
-                            {statusText === "Healthy" && (
-                              <span
-                                className="absolute top-0 right-0 w-3 h-3 rounded-full border-2 border-zinc-900"
-                                style={{ background: statusColor }}
-                              ></span>
-                            )}
-                          </div>
-                          <div>
-                            <p className="text-[10px] uppercase tracking-widest text-[#9AA6C4] font-bold mb-1">
-                              System Status
-                            </p>
-                            <p
-                              className="text-lg font-bold"
-                              style={{ color: statusColor }}
-                            >
-                              {statusText}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex gap-8 text-right">
-                          <div>
-                            <p className="text-[10px] uppercase tracking-widest text-[#9AA6C4] font-bold mb-1">
-                              Failure Rate
-                            </p>
-                            <p className="text-lg font-mono text-white">
-                              {failRate}%
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-[10px] uppercase tracking-widest text-[#9AA6C4] font-bold mb-1">
-                              P95 Latency
-                            </p>
-                            <p className="text-lg font-mono text-white">
-                              {p95.toFixed(0)}
-                              <span className="text-xs text-white/40 ml-1">
-                                ms
-                              </span>
-                            </p>
-                          </div>
-                          <div className="hidden sm:block">
-                            <p className="text-[10px] uppercase tracking-widest text-[#9AA6C4] font-bold mb-1">
-                              Last Incident
-                            </p>
-                            <p className="text-lg text-white/90">
-                              {lastIncident}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                {/* ── Simulation Configurator ── */}
-                <div className="ds-card p-8">
-                  <div className="flex items-center gap-2 mb-8">
-                    <Play className="w-4 h-4" style={{ color: "#00C8FF" }} />
-                    <h2 className="font-bold text-white text-sm uppercase tracking-widest">
-                      Configure Simulation —{" "}
-                      <span className="ds-gradient-text">
-                        {selectedProject.name}
-                      </span>
-                    </h2>
-                  </div>
-
-                  <div className="flex flex-col gap-5">
-                    {/* --- FEATURE 2: AI TEST GENERATOR UI --- */}
-                    <div
-                      className="p-5 rounded-xl"
-                      style={{
-                        background: "rgba(0,200,255,0.04)",
-                        border: "1px solid rgba(0,200,255,0.1)",
-                      }}
-                    >
-                      <div className="flex items-center gap-2 mb-3">
-                        <Sparkles className="w-4 h-4 text-[#00C8FF]" />
-                        <h3 className="font-semibold text-sm text-white">
-                          Probe notes helper
-                        </h3>
-                      </div>
-                      <p className="text-xs mb-3" style={{ color: "#9AA6C4" }}>
-                        Optional tips only — this does not inject failures. The
-                        real run below sends one HTTP GET.
-                      </p>
-                      <div className="flex gap-3">
-                        <input
-                          value={aiPrompt}
-                          onChange={(e) => setAiPrompt(e.target.value)}
-                          className="ds-input flex-1 text-sm bg-black/50"
-                          placeholder="e.g. Check latency on my public API..."
-                        />
-                        <Button
-                          id="ai-generate-btn"
-                          onClick={handleAIGenerate}
-                          isLoading={isAIGenerating}
-                          style={{ minWidth: "140px" }}
-                        >
-                          Generate
-                        </Button>
-                      </div>
-                      <AnimatePresence>
-                        {generatedConfig && (
-                          <motion.div
-                            initial={{ opacity: 0, height: 0 }}
-                            animate={{ opacity: 1, height: "auto" }}
-                            exit={{ opacity: 0, height: 0 }}
-                            className="mt-4"
-                          >
-                            <p className="text-xs text-[#9AA6C4] mb-3">
-                              {generatedConfig.description}
-                            </p>
-                            <div className="grid grid-cols-3 gap-3">
-                              <div className="bg-black/30 p-3 rounded-lg border border-white/5">
-                                <p className="text-[10px] uppercase text-[#9AA6C4] font-semibold mb-1">
-                                  Error budget tip
-                                </p>
-                                <p className="text-white font-mono">
-                                  {generatedConfig.failureRate}%
-                                </p>
-                              </div>
-                              <div className="bg-black/30 p-3 rounded-lg border border-white/5">
-                                <p className="text-[10px] uppercase text-[#9AA6C4] font-semibold mb-1">
-                                  Latency watch
-                                </p>
-                                <p className="text-white font-mono">
-                                  {generatedConfig.latencySpikes}ms
-                                </p>
-                              </div>
-                              <div className="bg-black/30 p-3 rounded-lg border border-white/5">
-                                <p className="text-[10px] uppercase text-[#9AA6C4] font-semibold mb-1">
-                                  Suggested runs
-                                </p>
-                                <p className="text-white font-mono">
-                                  {generatedConfig.concurrency}
-                                </p>
-                              </div>
-                            </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
-
-                    <div>
-                      <label className="ds-label">Target Endpoint URL</label>
-                      <input
-                        value={endpoint}
-                        onChange={(e) => setEndpoint(e.target.value)}
-                        className="ds-input font-mono text-sm"
-                        placeholder="https://httpbin.org/get"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="mt-6 flex flex-col gap-4">
-                    <Button
-                      onClick={runSimulation}
-                      isLoading={isSimulating}
-                      className="w-full text-base py-3"
-                    >
-                      <Play className="w-4 h-4 mr-2" />
-                      {isSimulating
-                        ? "Running Simulation…"
-                        : "Run Reliability Test"}
-                    </Button>
-
-                    <AnimatePresence>
-                      {isSimulating && (
-                        <motion.div
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: "auto" }}
-                          exit={{ opacity: 0, height: 0 }}
-                          className="flex flex-col gap-2 overflow-hidden"
-                        >
-                          <div className="flex justify-between items-center text-xs text-[#9AA6C4] font-mono">
-                            <span className="flex items-center gap-2">
-                              <Loader2 className="w-3 h-3 text-[#00C8FF] animate-spin" />
-                              {statusMessage || "Starting simulation..."}
-                            </span>
-                            <span
-                              className={
-                                liveLatency > 600
-                                  ? "text-[#ff4d4d]"
-                                  : "text-[#00C8FF]"
-                              }
-                            >
-                              {liveLatency > 0 ? `${liveLatency}ms` : "--"}
-                            </span>
-                          </div>
-                          <div className="h-1.5 w-full bg-black/50 rounded-full overflow-hidden border border-white/5">
-                            <motion.div
-                              className="h-full bg-gradient-to-r from-[#00C8FF]/50 to-[#00C8FF]"
-                              initial={{ width: 0 }}
-                              animate={{ width: `${simulationProgress}%` }}
-                              transition={{ duration: 0.2 }}
-                            />
-                          </div>
-                          <div className="text-[10px] text-right font-mono text-[#00C8FF]/60">
-                            {simulationProgress}%
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
-                </div>
-
-                {/* ── Simulation Result ── */}
-                <AnimatePresence>
-                  {simulationResult && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 16 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: 8 }}
-                      transition={{ duration: 0.4 }}
-                      className="ds-card p-8 relative overflow-hidden"
-                    >
-                      <div className="flex items-start justify-between mb-2">
-                        <div className="flex items-center gap-3">
-                          {simulationResult.status === "SUCCESS" ? (
-                            <CheckCircle
-                              className="w-7 h-7"
-                              style={{ color: "#00C8FF" }}
-                            />
-                          ) : (
-                            <XCircle
-                              className="w-7 h-7"
-                              style={{ color: "#ff4d4d" }}
-                            />
-                          )}
-                          <div>
-                            <p className="ds-label mb-0">Result</p>
-                            <p className="text-xl font-bold text-white">
-                              {simulationResult.status}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="ds-label mb-0">P95 Latency</p>
-                          <p className="text-3xl font-mono font-bold ds-gradient-text">
-                            {simulationResult.avgLatency.toFixed(0)}
-                            <span className="text-base text-white/40">ms</span>
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* decorative glow */}
-                      <div
-                        className="ds-glow-orb w-48 h-48 -bottom-16 -right-16"
-                        style={{ opacity: 0.12 }}
-                      />
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-
-                {/* ── Data Visualization ── */}
-                {selectedProject?.simulations &&
                   selectedProject.simulations.length > 0 && (
-                    <>
-                      <div
-                        className="ds-card p-5 mb-5"
-                        style={{ border: "1px solid rgba(0,200,255,0.18)" }}
-                      >
-                        <div className="flex items-center justify-between mb-3">
-                          <h3 className="font-bold text-white text-sm uppercase tracking-widest">
-                            Observability
-                          </h3>
-                          <span
-                            className="text-[11px] font-mono"
-                            style={{
-                              color: observability?.redis.connected
-                                ? "#00C8FF"
-                                : "#ff7070",
-                            }}
-                          >
-                            {observability?.redis.connected
-                              ? "Redis Healthy"
-                              : "Redis Unavailable"}
-                          </span>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-                          <div
-                            className="rounded-lg p-3"
-                            style={{
-                              background: "rgba(0,200,255,0.06)",
-                              border: "1px solid rgba(0,200,255,0.14)",
-                            }}
-                          >
-                            <p
-                              className="text-[10px] uppercase tracking-widest"
-                              style={{ color: "#9AA6C4" }}
-                            >
-                              Cache Hit Rate
-                            </p>
-                            <p className="text-xl font-bold text-white mt-1">
-                              {observability?.cache_hit_rate?.toFixed(1) ??
-                                "0.0"}
-                              %
-                            </p>
-                          </div>
-                          <div
-                            className="rounded-lg p-3"
-                            style={{
-                              background: "rgba(255,77,77,0.06)",
-                              border: "1px solid rgba(255,77,77,0.14)",
-                            }}
-                          >
-                            <p
-                              className="text-[10px] uppercase tracking-widest"
-                              style={{ color: "#9AA6C4" }}
-                            >
-                              Requests Blocked
-                            </p>
-                            <p className="text-xl font-bold text-white mt-1">
-                              {observability?.rate_limit_blocked ?? 0}
-                            </p>
-                          </div>
-                          <div
-                            className="rounded-lg p-3"
-                            style={{
-                              background: "rgba(255,255,255,0.04)",
-                              border: "1px solid rgba(255,255,255,0.10)",
-                            }}
-                          >
-                            <p
-                              className="text-[10px] uppercase tracking-widest"
-                              style={{ color: "#9AA6C4" }}
-                            >
-                              Redis
-                            </p>
-                            <p className="text-sm font-semibold text-white mt-1">
-                              {(
-                                observability?.redis.provider ?? "local"
-                              ).toUpperCase()}{" "}
-                              {observability?.redis.connected
-                                ? `(${observability?.redis.latency ?? -1}ms)`
-                                : "(offline)"}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* --- FEATURE 3: AI SUMMARY UI --- */}
-                      <div
-                        className="ds-card p-6 mb-5"
-                        style={{
-                          background:
-                            "linear-gradient(to right, rgba(0,200,255,0.05), rgba(0,0,0,0))",
-                        }}
-                      >
-                        <div className="flex items-center gap-2 mb-3">
-                          <Zap className="w-5 h-5 text-[#00C8FF]" />
-                          <h3 className="font-bold text-white text-sm uppercase tracking-widest">
-                            AI Analysis
-                          </h3>
-                          {primaryAIData ? (
-                            <div className="ml-auto flex items-center gap-2">
-                              <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-[#00C8FF]/10 border border-[#00C8FF]/20">
-                                <Sparkles className="w-3 h-3 text-[#00C8FF]" />
-                                <span className="text-[10px] font-mono text-[#00C8FF]">
-                                  {primaryAIData.confidenceScore}% Confidence
-                                </span>
-                              </div>
-                              <span
-                                className="text-xs font-bold px-2.5 py-1 rounded-full"
-                                style={getRiskStyle(primaryAIData.riskLevel)}
-                              >
-                                {primaryAIData.riskLevel}
-                              </span>
-                            </div>
-                          ) : null}
-                        </div>
-                        {isGeneratingSummary ? (
-                          <div className="flex items-center gap-3 text-sm text-[#9AA6C4]">
-                            <Loader2 className="w-4 h-4 animate-spin text-[#00C8FF]" />{" "}
-                            Generating insights across{" "}
-                            {selectedProject.simulations.length} runs...
-                          </div>
-                        ) : (
-                          <div className="space-y-3 text-sm leading-relaxed text-[#9AA6C4]">
-                            <p>
-                              {aiSummary?.overallHealth ||
-                                "Summary unavailable right now. Run another simulation to refresh AI analysis."}
-                            </p>
-
-                            {primaryAIData?.reasoning ? (
-                              <div
-                                className="text-xs leading-relaxed px-3 py-2 rounded-lg border"
-                                style={{
-                                  color: "#9AA6C4",
-                                  borderColor: "rgba(0,200,255,0.18)",
-                                  background: "rgba(0,200,255,0.06)",
-                                }}
-                              >
-                                {primaryAIData.reasoning}
-                              </div>
-                            ) : null}
-
-                            {aiSummary?.majorRisks?.length ? (
-                              <div>
-                                <span className="text-[10px] uppercase tracking-widest font-semibold text-[#ff9b9b]">
-                                  Major Risks
-                                </span>
-                                <ul className="mt-1 space-y-1">
-                                  {aiSummary.majorRisks.map((risk, idx) => (
-                                    <li key={`risk-${idx}`}>- {risk}</li>
-                                  ))}
-                                </ul>
-                              </div>
-                            ) : null}
-
-                            {primaryAIData?.insights?.length ? (
-                              <div>
-                                <span className="text-[10px] uppercase tracking-widest font-semibold text-[#ff9b9b]">
-                                  Insights
-                                </span>
-                                <ul className="mt-1 space-y-1">
-                                  {primaryAIData.insights.map(
-                                    (insight, idx) => (
-                                      <li key={`insight-${idx}`}>
-                                        - {insight}
-                                      </li>
-                                    ),
-                                  )}
-                                </ul>
-                              </div>
-                            ) : null}
-
-                            {aiSummary?.recommendedActions?.length ||
-                            aiSummary?.recommendations?.length ? (
-                              <div>
-                                <span className="text-[10px] uppercase tracking-widest font-semibold text-[#00C8FF]">
-                                  Recommended Actions
-                                </span>
-                                <ul className="mt-1 space-y-1">
-                                  {(
-                                    aiSummary.recommendedActions ??
-                                    aiSummary.recommendations
-                                  ).map((action, idx) => {
-                                    const priority = getActionPriority(action);
-                                    const priorityStyle =
-                                      getPriorityStyle(priority);
-                                    return (
-                                      <li
-                                        key={`rec-${idx}`}
-                                        className="flex items-start justify-between gap-2"
-                                      >
-                                        <span>- {action}</span>
-                                        <span
-                                          className="text-[10px] px-1.5 py-0.5 rounded border font-semibold"
-                                          style={priorityStyle}
-                                        >
-                                          {priority}
-                                        </span>
-                                      </li>
-                                    );
-                                  })}
-                                </ul>
-                              </div>
-                            ) : null}
-
-                            {primaryAIData?.signalsUsed?.length ? (
-                              <div>
-                                <span className="text-[10px] uppercase tracking-widest font-semibold text-[#86e9ff]">
-                                  Signals Used
-                                </span>
-                                <div className="mt-1 flex flex-wrap gap-2">
-                                  {primaryAIData.signalsUsed.map(
-                                    (signal, idx) => (
-                                      <span
-                                        key={`signal-${idx}`}
-                                        className="text-[10px] px-2 py-1 rounded-full border"
-                                        style={{
-                                          borderColor: "rgba(0,200,255,0.25)",
-                                          color: "#86e9ff",
-                                          background: "rgba(0,200,255,0.08)",
-                                        }}
-                                      >
-                                        {signal}
-                                      </span>
-                                    ),
-                                  )}
-                                </div>
-                              </div>
-                            ) : null}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                        <div className="ds-card p-6">
-                          <h3 className="font-bold text-white text-sm uppercase tracking-widest mb-4">
-                            Latency Trend
-                          </h3>
-                          <div className="h-48">
-                            <ResponsiveContainer width="100%" height="100%">
-                              <LineChart
-                                data={validChartData}
-                                margin={{
-                                  top: 20,
-                                  right: 30,
-                                  left: 10,
-                                  bottom: 10,
-                                }}
-                              >
-                                <XAxis
-                                  dataKey="run"
-                                  tick={{ fill: "#94a3b8", fontSize: 12 }}
-                                  tickMargin={10}
-                                  padding={{ left: 20, right: 20 }}
-                                  interval={0}
-                                  angle={0}
-                                  textAnchor="middle"
-                                  tickLine={false}
-                                  axisLine={false}
-                                />
-                                <YAxis
-                                  stroke="#9AA6C4"
-                                  fontSize={10}
-                                  tickLine={false}
-                                  axisLine={false}
-                                />
-                                <Tooltip
-                                  contentStyle={{
-                                    background: "#0F172A",
-                                    border: "1px solid #1E293B",
-                                    borderRadius: "8px",
-                                  }}
-                                  itemStyle={{ color: "#00C8FF" }}
-                                />
-                                <Line
-                                  type="monotone"
-                                  dataKey="latency"
-                                  stroke="#00C8FF"
-                                  strokeWidth={2}
-                                  dot={{
-                                    r: 3,
-                                    fill: "#0F172A",
-                                    stroke: "#00C8FF",
-                                    strokeWidth: 2,
-                                  }}
-                                />
-                              </LineChart>
-                            </ResponsiveContainer>
-                          </div>
-                        </div>
-                        <div className="ds-card p-6">
-                          <h3 className="font-bold text-white text-sm uppercase tracking-widest mb-4">
-                            Reliability Split
-                          </h3>
-                          <div className="h-48">
-                            <ResponsiveContainer width="100%" height="100%">
-                              <PieChart>
-                                <Pie
-                                  data={pieData}
-                                  cx="50%"
-                                  cy="50%"
-                                  innerRadius={50}
-                                  outerRadius={70}
-                                  paddingAngle={5}
-                                  dataKey="value"
-                                >
-                                  {pieData.map((entry, index) => (
-                                    <Cell
-                                      key={`cell-${index}`}
-                                      fill={COLORS[index % COLORS.length]}
-                                    />
-                                  ))}
-                                </Pie>
-                                <Tooltip
-                                  contentStyle={{
-                                    background: "#0F172A",
-                                    border: "1px solid #1E293B",
-                                    borderRadius: "8px",
-                                  }}
-                                  itemStyle={{ color: "#fff" }}
-                                />
-                              </PieChart>
-                            </ResponsiveContainer>
-                            <div className="flex justify-center gap-4 mt-2">
-                              <div className="flex items-center gap-2">
-                                <div
-                                  className="w-2 h-2 rounded-full"
-                                  style={{ background: "#00C8FF" }}
-                                ></div>
-                                <span className="text-xs text-slate-300">
-                                  Success ({successCount})
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <div
-                                  className="w-2 h-2 rounded-full"
-                                  style={{ background: "#ff4d4d" }}
-                                ></div>
-                                <span className="text-xs text-slate-300">
-                                  Failed ({failureCount})
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </>
+                    <AiSummaryPanel
+                      aiSummary={aiSummary}
+                      isGeneratingSummary={isGeneratingSummary}
+                      primaryAIData={primaryAIData}
+                      simulationCount={selectedProject.simulations.length}
+                    />
                   )}
 
-                {/* ── Simulation History ── */}
-                <div className="ds-card overflow-hidden">
-                  <div
-                    className="px-6 py-4 flex items-center gap-2"
-                    style={{ borderBottom: "1px solid rgba(0,200,255,0.10)" }}
-                  >
-                    <Activity
-                      className="w-4 h-4"
-                      style={{ color: "#00C8FF" }}
-                    />
-                    <h3 className="font-bold text-white text-sm uppercase tracking-widest">
-                      Run History
-                    </h3>
-                  </div>
-                  <div
-                    className="max-h-[280px] overflow-y-auto no-scrollbar divide-y"
-                    style={{ borderColor: "rgba(0,200,255,0.08)" }}
-                  >
-                    {(!selectedProject.simulations ||
-                      selectedProject.simulations.length === 0) && (
-                      <p
-                        className="p-8 text-center text-sm"
-                        style={{ color: "#9AA6C4" }}
-                      >
-                        No simulations yet. Run your first test above.
-                      </p>
-                    )}
-                    {selectedProject.simulations
-                      ?.slice()
-                      .reverse()
-                      .map((sim: Simulation) => (
-                        <div
-                          key={sim.id}
-                          className="px-6 py-4 flex items-center justify-between hover:bg-white/[0.02] transition-colors"
-                        >
-                          <div className="min-w-0">
-                            <p
-                              className="text-sm font-mono truncate text-white"
-                              style={{ maxWidth: 220 }}
-                            >
-                              {sim.endpoint}
-                            </p>
-                            <p
-                              className="text-[11px] mt-0.5"
-                              style={{ color: "#9AA6C4" }}
-                            >
-                              {new Date(sim.createdAt).toLocaleString()}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-4 flex-shrink-0 ml-4">
-                            <span
-                              className="text-[11px] font-bold px-2.5 py-1 rounded-full"
-                              style={
-                                sim.status === "SUCCESS"
-                                  ? {
-                                      background: "rgba(0,200,255,0.12)",
-                                      color: "#00C8FF",
-                                    }
-                                  : {
-                                      background: "rgba(255,50,50,0.12)",
-                                      color: "#ff7070",
-                                    }
-                              }
-                            >
-                              {sim.status}
-                            </span>
-                            <p className="text-sm font-mono text-right w-16 text-white">
-                              {sim.avgLatency.toFixed(0)}ms
-                            </p>
-                          </div>
-                        </div>
-                      ))}
-                  </div>
-                </div>
+                <HistoryChartsPanel
+                  selectedProject={selectedProject}
+                  observability={observability}
+                  validChartData={validChartData}
+                  pieData={pieData}
+                  successCount={successCount}
+                  failureCount={failureCount}
+                />
               </>
             )}
           </div>

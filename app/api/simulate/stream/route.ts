@@ -5,6 +5,7 @@ import { checkRateLimit } from "@/lib/rateLimiter";
 import prisma from "@/lib/prisma";
 import { assertSafeHttpUrl, UnsafeUrlError } from "@/lib/urlSafety";
 import { findOwnedProject } from "@/lib/projectAccess";
+import { parseProbeOptions } from "@/lib/probeOptions";
 
 export async function GET(req: Request) {
   const session = await getServerSession(authOptions);
@@ -30,12 +31,15 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const projectId = searchParams.get("projectId");
   const endpoint = searchParams.get("endpoint");
+  const method = searchParams.get("method") ?? undefined;
+  const concurrency = searchParams.get("concurrency") ?? undefined;
+  const headers = searchParams.get("headers") ?? undefined;
+  const body = searchParams.get("body") ?? undefined;
 
   if (!projectId || !endpoint) {
     return new Response("Missing parameters", { status: 400 });
   }
 
-  // Only allow simulations against projects owned by the logged-in user.
   const project = await findOwnedProject(projectId, user.id);
   if (!project) {
     return new Response(
@@ -45,6 +49,19 @@ export async function GET(req: Request) {
         headers: { "Content-Type": "application/json" },
       },
     );
+  }
+
+  const probeParsed = parseProbeOptions({
+    method,
+    concurrency,
+    headers,
+    body,
+  });
+  if (!probeParsed.ok) {
+    return new Response(JSON.stringify({ message: probeParsed.error }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
   let safeEndpoint: string;
@@ -77,7 +94,6 @@ export async function GET(req: Request) {
     );
   }
 
-  // Real-time SSE Stream
   const stream = new ReadableStream({
     async start(controller) {
       const sendEvent = (event: string, data: unknown) => {
@@ -87,22 +103,32 @@ export async function GET(req: Request) {
       };
 
       try {
-        sendEvent("status", { message: "Initializing simulation..." });
-        sendEvent("progress", { progressPercent: 10 });
+        const { concurrency: n, method: m } = probeParsed.options;
+        sendEvent("status", {
+          message:
+            n > 1
+              ? `Running ${n} concurrent ${m} probes...`
+              : `Sending ${m} request...`,
+        });
+        sendEvent("progress", { progressPercent: 15 });
 
-        sendEvent("status", { message: "Sending request..." });
-
-        const simulation = await runRealSimulation(project.id, safeEndpoint);
+        const simulation = await runRealSimulation(project.id, safeEndpoint, {
+          method: probeParsed.options.method,
+          concurrency: probeParsed.options.concurrency,
+          headers: probeParsed.options.headers,
+          body: probeParsed.options.body,
+        });
 
         sendEvent("latency", {
-          value: Math.round(simulation.avgLatency ?? simulation.latency ?? 0),
+          value: Math.round(simulation.loadMetrics.p50Ms || simulation.avgLatency),
+          p50: simulation.loadMetrics.p50Ms,
+          p95: simulation.loadMetrics.p95Ms,
+          errorRatePercent: simulation.loadMetrics.errorRatePercent,
+          concurrency: simulation.loadMetrics.concurrency,
         });
-        sendEvent("progress", { progressPercent: 50 });
-
+        sendEvent("progress", { progressPercent: 70 });
         sendEvent("status", { message: "Analyzing with AI..." });
-        sendEvent("progress", { progressPercent: 80 });
-
-        sendEvent("status", { message: "Finalizing simulation result..." });
+        sendEvent("progress", { progressPercent: 90 });
         sendEvent("complete", { simulation });
       } catch (err) {
         const message =

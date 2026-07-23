@@ -17,7 +17,7 @@
 5. Returns **AI structured insights** (or a safe fallback if no OpenAI key)
 6. Supports **API keys**, rate limits (Free 10/min · Pro 100/min), Redis cache, Docker, and CI
 
-It does **not** inject artificial failures, run a CLI, or do large-scale load testing yet. Those are future ideas — the product matches the marketing copy.
+It does **not** inject artificial failures or ship a CLI. It **does** support small concurrent probes (1–20) with p50/p95/error % and GET/POST + custom headers.
 
 ## Why it exists
 
