@@ -103,7 +103,11 @@ export default function DashboardClient({
 }: {
   user: { isPaid: boolean; isAdmin: boolean } | null;
 }) {
-  void user;
+  const planLabel = user?.isAdmin
+    ? "Admin"
+    : user?.isPaid
+      ? "Pro · 100 req/min"
+      : "Free · 10 req/min";
   const { data: session, status } = useSession();
   const router = useRouter();
   const [projects, setProjects] = useState<Project[]>([]);
@@ -111,8 +115,8 @@ export default function DashboardClient({
   const [newProjectName, setNewProjectName] = useState("");
   const [isCreating, setIsCreating] = useState(false);
 
-  // Simulation form
-  const [endpoint, setEndpoint] = useState("https://api.example.com/v1/users");
+  // Simulation form — httpbin.org is a public test API that always works for demos
+  const [endpoint, setEndpoint] = useState("https://httpbin.org/get");
   const [isSimulating, setIsSimulating] = useState(false);
   const [simulationResult, setSimulationResult] = useState<Simulation | null>(
     null,
@@ -809,7 +813,7 @@ export default function DashboardClient({
       description: "",
     };
 
-    config.description = `Generated Test Plan: Simulating ${config.concurrency} concurrent virtual users with expected ${config.failureRate}% failure injection and ${config.latencySpikes}ms latency p95.`;
+    config.description = `Suggested probe notes: try about ${config.concurrency} careful manual runs and watch for latency near ${config.latencySpikes}ms. (This helper does not inject failures — probes are real HTTP GETs.)`;
 
     setGeneratedConfig(config);
     setIsAIGenerating(false);
@@ -967,6 +971,27 @@ export default function DashboardClient({
                 {session?.user?.name || session?.user?.email}
               </span>
             </p>
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <span
+                className="text-xs font-semibold px-3 py-1 rounded-full"
+                style={{
+                  color: "#00C8FF",
+                  background: "rgba(0,200,255,0.12)",
+                  border: "1px solid rgba(0,200,255,0.25)",
+                }}
+              >
+                {planLabel}
+              </span>
+              {!user?.isPaid && !user?.isAdmin && (
+                <a
+                  href="/pricing"
+                  className="text-xs underline"
+                  style={{ color: "#9AA6C4" }}
+                >
+                  Raise limits with Pro →
+                </a>
+              )}
+            </div>
           </div>
           <Button
             variant="ghost"
@@ -1424,15 +1449,19 @@ export default function DashboardClient({
                       <div className="flex items-center gap-2 mb-3">
                         <Sparkles className="w-4 h-4 text-[#00C8FF]" />
                         <h3 className="font-semibold text-sm text-white">
-                          AI Test Generator
+                          Probe notes helper
                         </h3>
                       </div>
+                      <p className="text-xs mb-3" style={{ color: "#9AA6C4" }}>
+                        Optional tips only — this does not inject failures. The
+                        real run below sends one HTTP GET.
+                      </p>
                       <div className="flex gap-3">
                         <input
                           value={aiPrompt}
                           onChange={(e) => setAiPrompt(e.target.value)}
                           className="ds-input flex-1 text-sm bg-black/50"
-                          placeholder="e.g. Test my API under heavy load..."
+                          placeholder="e.g. Check latency on my public API..."
                         />
                         <Button
                           id="ai-generate-btn"
@@ -1457,7 +1486,7 @@ export default function DashboardClient({
                             <div className="grid grid-cols-3 gap-3">
                               <div className="bg-black/30 p-3 rounded-lg border border-white/5">
                                 <p className="text-[10px] uppercase text-[#9AA6C4] font-semibold mb-1">
-                                  Failure Injection
+                                  Error budget tip
                                 </p>
                                 <p className="text-white font-mono">
                                   {generatedConfig.failureRate}%
@@ -1465,7 +1494,7 @@ export default function DashboardClient({
                               </div>
                               <div className="bg-black/30 p-3 rounded-lg border border-white/5">
                                 <p className="text-[10px] uppercase text-[#9AA6C4] font-semibold mb-1">
-                                  Latency Spikes
+                                  Latency watch
                                 </p>
                                 <p className="text-white font-mono">
                                   {generatedConfig.latencySpikes}ms
@@ -1473,10 +1502,10 @@ export default function DashboardClient({
                               </div>
                               <div className="bg-black/30 p-3 rounded-lg border border-white/5">
                                 <p className="text-[10px] uppercase text-[#9AA6C4] font-semibold mb-1">
-                                  Concurrency
+                                  Suggested runs
                                 </p>
                                 <p className="text-white font-mono">
-                                  {generatedConfig.concurrency} VU
+                                  {generatedConfig.concurrency}
                                 </p>
                               </div>
                             </div>
@@ -1491,7 +1520,7 @@ export default function DashboardClient({
                         value={endpoint}
                         onChange={(e) => setEndpoint(e.target.value)}
                         className="ds-input font-mono text-sm"
-                        placeholder="https://api.yourservice.com/endpoint"
+                        placeholder="https://httpbin.org/get"
                       />
                     </div>
                   </div>

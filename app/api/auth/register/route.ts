@@ -1,23 +1,21 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import bcrypt from "bcryptjs";
 import { sendWelcomeEmail } from "@/lib/email";
+import { hashPassword, validateRegistrationInput } from "@/lib/passwords";
 
 export async function POST(req: Request) {
   try {
-    const { email, password, name } = await req.json();
-    const normalizedEmail =
-      typeof email === "string" ? email.trim().toLowerCase() : "";
+    const body = await req.json();
+    const validated = validateRegistrationInput(body);
 
-    if (!normalizedEmail || !password) {
-      return NextResponse.json(
-        { error: "Missing email or password" },
-        { status: 400 },
-      );
+    if (!validated.ok) {
+      return NextResponse.json({ error: validated.error }, { status: 400 });
     }
 
+    const { email, password, name } = validated;
+
     const existingUser = await prisma.user.findUnique({
-      where: { email: normalizedEmail },
+      where: { email },
     });
 
     if (existingUser) {
@@ -27,18 +25,17 @@ export async function POST(req: Request) {
       );
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await hashPassword(password);
 
     const user = await prisma.user.create({
       data: {
-        email: normalizedEmail,
+        email,
         password: hashedPassword,
         name,
       },
     });
 
-    // Send Welcome Email asynchronously
-    await sendWelcomeEmail(normalizedEmail, name || "Developer");
+    await sendWelcomeEmail(email, name || "Developer");
 
     return NextResponse.json({
       message: "User created successfully",
@@ -61,7 +58,7 @@ export async function POST(req: Request) {
 
     if (prismaCode === "P1000" || prismaCode === "P1001") {
       return NextResponse.json(
-        { error: "Database unavailable. Please try again in a moment." },
+        { error: "Database unavailable. Please try again later." },
         { status: 503 },
       );
     }

@@ -134,8 +134,14 @@ export default function LoginPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   className="ds-input"
                   placeholder="••••••••••"
+                  minLength={isRegister ? 8 : undefined}
                   required
                 />
+                {isRegister && (
+                  <p className="text-xs mt-1.5" style={{ color: "#9AA6C4" }}>
+                    At least 8 characters
+                  </p>
+                )}
               </div>
 
               {error && (

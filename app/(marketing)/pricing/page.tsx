@@ -3,14 +3,16 @@
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Loader2, Lock, CheckCircle2 } from "lucide-react";
+import { Loader2, Zap, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { useState } from "react";
+import Link from "next/link";
 
 export default function Pricing() {
   const { data: session, status, update } = useSession();
   const router = useRouter();
   const [isUpgrading, setIsUpgrading] = useState(false);
+  const [error, setError] = useState("");
 
   if (status === "loading") {
     return (
@@ -31,11 +33,17 @@ export default function Pricing() {
   };
 
   const handleUpgrade = async () => {
+    if (!session?.user) {
+      router.push("/login");
+      return;
+    }
+
     setIsUpgrading(true);
+    setError("");
     try {
       const isLoaded = await loadRazorpayScript();
       if (!isLoaded) {
-        console.error("Razorpay SDK failed to load");
+        setError("Could not load Razorpay checkout.");
         setIsUpgrading(false);
         return;
       }
@@ -44,7 +52,10 @@ export default function Pricing() {
       const orderData = await orderRes.json();
 
       if (!orderRes.ok || !orderData.id) {
-        console.error("Failed to create Razorpay order");
+        setError(
+          orderData.error ||
+            "Could not start checkout. Check Razorpay env keys, or stay on Free.",
+        );
         setIsUpgrading(false);
         return;
       }
@@ -54,7 +65,7 @@ export default function Pricing() {
         amount: orderData.amount,
         currency: orderData.currency,
         name: "API Reliability Lab",
-        description: "Pro Subscription",
+        description: "Pro — 100 requests / minute",
         order_id: orderData.id,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         handler: async function (response: any) {
@@ -70,13 +81,14 @@ export default function Pricing() {
             });
 
             if (verifyRes.ok) {
-              await update(); // refresh session
+              await update();
               router.push("/success");
             } else {
-              console.error("Payment verification failed");
+              setError("Payment verification failed.");
             }
           } catch (err) {
             console.error("Error during verification:", err);
+            setError("Payment verification error.");
           }
         },
         prefill: {
@@ -93,10 +105,12 @@ export default function Pricing() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       rzp.on("payment.failed", function (response: any) {
         console.error("Payment Failed:", response.error);
+        setError("Payment failed. You can keep using Free.");
       });
       rzp.open();
     } catch (e) {
       console.error(e);
+      setError("Unexpected checkout error.");
     } finally {
       setIsUpgrading(false);
     }
@@ -111,32 +125,34 @@ export default function Pricing() {
       >
         <div className="flex justify-center mb-6">
           <div className="w-16 h-16 rounded-full bg-zinc-800 flex items-center justify-center">
-            <Lock className="w-8 h-8 text-blue-500" />
+            <Zap className="w-8 h-8 text-blue-500" />
           </div>
         </div>
 
-        <h1 className="text-2xl font-bold text-center mb-2">
-          Restricted Access
-        </h1>
+        <h1 className="text-2xl font-bold text-center mb-2">Upgrade to Pro</h1>
         <p className="text-zinc-400 text-center mb-8">
-          You need an active subscription to access the dashboard and core
-          features of the API Reliability Lab.
+          Free already includes the full dashboard (10 requests/min). Pro raises
+          your limit to 100 requests/min after a verified Razorpay payment.
         </p>
 
         <div className="space-y-4 mb-8">
           <div className="flex items-center gap-3 text-zinc-300">
             <CheckCircle2 className="w-5 h-5 text-blue-500" />
-            <span>Full API Simulation Suite</span>
+            <span>Same live probes + AI insights</span>
           </div>
           <div className="flex items-center gap-3 text-zinc-300">
             <CheckCircle2 className="w-5 h-5 text-blue-500" />
-            <span>Advanced Analytics Dashboard</span>
+            <span>100 requests per minute</span>
           </div>
           <div className="flex items-center gap-3 text-zinc-300">
             <CheckCircle2 className="w-5 h-5 text-blue-500" />
-            <span>Priority Support</span>
+            <span>No fake payment unlock</span>
           </div>
         </div>
+
+        {error && (
+          <p className="text-sm text-red-400 text-center mb-4">{error}</p>
+        )}
 
         <Button
           onClick={handleUpgrade}
@@ -146,8 +162,19 @@ export default function Pricing() {
           {isUpgrading ? (
             <Loader2 className="w-5 h-5 animate-spin mr-2 inline" />
           ) : null}
-          {isUpgrading ? "Upgrading..." : "Upgrade Now"}
+          {session?.user
+            ? isUpgrading
+              ? "Opening checkout..."
+              : "Pay with Razorpay"
+            : "Sign in to upgrade"}
         </Button>
+
+        <p className="text-center text-sm text-zinc-500 mt-6">
+          Or{" "}
+          <Link href="/dashboard" className="text-blue-400 underline">
+            continue on Free
+          </Link>
+        </p>
       </motion.div>
     </div>
   );

@@ -1,17 +1,20 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Terminal, Copy, Check, Info } from "lucide-react";
+import { Terminal, Copy, Check, Info, KeyRound } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
+
+const DEMO_CURL = `curl -X POST https://arp-cgpt.vercel.app/api/simulate \\
+  -H "Authorization: Bearer YOUR_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"projectId":"YOUR_PROJECT_ID","endpoint":"https://httpbin.org/get"}'`;
 
 export default function DocsSection() {
   const [copied, setCopied] = useState(false);
 
   const copyCode = () => {
-    navigator.clipboard.writeText(
-      `curl -X POST https://airlb.ai/api/simulate \\\n  -H "Authorization: Bearer YOUR_API_KEY" \\\n  -d '{"endpoint":"https://api.yourlab.com/v1/auth","failureRate":25,"latency":500}'`,
-    );
+    navigator.clipboard.writeText(DEMO_CURL);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -19,7 +22,6 @@ export default function DocsSection() {
   return (
     <section id="docs" className="ds-section">
       <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
-        {/* Left — copy */}
         <div>
           <motion.div
             initial={{ opacity: 0, x: -20 }}
@@ -39,23 +41,26 @@ export default function DocsSection() {
             Built for{" "}
             <span className="ds-gradient-text italic">Engineers.</span>
             <br />
-            Integrated in minutes.
+            Probe an endpoint in minutes.
           </motion.h2>
           <p
             className="text-sm leading-relaxed mb-8"
             style={{ color: "#9AA6C4" }}
           >
-            A simple, secure REST API to simulate high-load scenarios globally —
-            no agents, no SDK overhead. Integrate reliability assertions
-            directly into your CI/CD pipelines.
+            Authenticate with your API key, pass a project id you own, and a
+            public https endpoint. The API enqueues a probe (or use the
+            dashboard SSE stream for live progress).
           </p>
 
           <div className="flex flex-wrap gap-3">
             <div className="ds-badge">
-              <Info className="w-3.5 h-3.5" /> API v2.0
+              <Info className="w-3.5 h-3.5" /> REST API
             </div>
             <div className="ds-badge">
-              <Terminal className="w-3.5 h-3.5" /> CLI Available
+              <KeyRound className="w-3.5 h-3.5" /> Bearer API keys
+            </div>
+            <div className="ds-badge">
+              <Terminal className="w-3.5 h-3.5" /> curl-friendly
             </div>
           </div>
 
@@ -64,12 +69,11 @@ export default function DocsSection() {
               Get API Key →
             </Button>
             <Button variant="ghost" href="/#docs" className="text-sm">
-              View Full Docs
+              See example
             </Button>
           </div>
         </div>
 
-        {/* Right — code block */}
         <motion.div
           initial={{ opacity: 0, x: 20 }}
           whileInView={{ opacity: 1, x: 0 }}
@@ -77,7 +81,6 @@ export default function DocsSection() {
           transition={{ duration: 0.5 }}
           className="ds-card overflow-hidden"
         >
-          {/* Terminal header */}
           <div
             className="flex items-center justify-between px-5 py-3"
             style={{
@@ -121,17 +124,22 @@ export default function DocsSection() {
             </button>
           </div>
 
-          {/* Code */}
           <pre className="p-7 font-mono text-[13px] leading-7 overflow-x-auto">
             <span style={{ color: "#4DEBFF" }}>curl</span>
             <span style={{ color: "#9AA6C4" }}> -X POST </span>
             <span style={{ color: "#fff" }}>
-              https://airlb.ai/api/simulate \{"\n"}
+              https://arp-cgpt.vercel.app/api/simulate \{"\n"}
             </span>
             {"  "}
             <span style={{ color: "#9AA6C4" }}>-H </span>
             <span style={{ color: "#4DEBFF" }}>
               &quot;Authorization: Bearer YOUR_API_KEY&quot;
+            </span>
+            <span style={{ color: "#9AA6C4" }}> \{"\n"}</span>
+            {"  "}
+            <span style={{ color: "#9AA6C4" }}>-H </span>
+            <span style={{ color: "#4DEBFF" }}>
+              &quot;Content-Type: application/json&quot;
             </span>
             <span style={{ color: "#9AA6C4" }}> \{"\n"}</span>
             {"  "}
@@ -141,21 +149,18 @@ export default function DocsSection() {
               {"\n"}
             </span>
             {"    "}
-            <span style={{ color: "#00C8FF" }}>&quot;endpoint&quot;</span>
+            <span style={{ color: "#00C8FF" }}>&quot;projectId&quot;</span>
             <span style={{ color: "#9AA6C4" }}>: </span>
             <span style={{ color: "#4DEBFF" }}>
-              &quot;https://api.yourlab.com/v1/auth&quot;
+              &quot;YOUR_PROJECT_ID&quot;
             </span>
             <span style={{ color: "#9AA6C4" }}>,{"\n"}</span>
             {"    "}
-            <span style={{ color: "#00C8FF" }}>&quot;failureRate&quot;</span>
+            <span style={{ color: "#00C8FF" }}>&quot;endpoint&quot;</span>
             <span style={{ color: "#9AA6C4" }}>: </span>
-            <span style={{ color: "#4DEBFF" }}>25</span>
-            <span style={{ color: "#9AA6C4" }}>,{"\n"}</span>
-            {"    "}
-            <span style={{ color: "#00C8FF" }}>&quot;latency&quot;</span>
-            <span style={{ color: "#9AA6C4" }}>: </span>
-            <span style={{ color: "#4DEBFF" }}>500{"\n"}</span>
+            <span style={{ color: "#4DEBFF" }}>
+              &quot;https://httpbin.org/get&quot;{"\n"}
+            </span>
             {"  "}
             <span style={{ color: "#fff" }}>{"}"}&apos;</span>
           </pre>

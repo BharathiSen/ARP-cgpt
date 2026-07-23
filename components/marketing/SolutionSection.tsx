@@ -6,23 +6,23 @@ export default function SolutionSection() {
   const steps = [
     {
       number: "01",
-      title: "Register API Endpoint",
-      desc: "Securely connect the endpoint you want to test.",
+      title: "Sign up & create a project",
+      desc: "Free accounts can use the full dashboard with fair rate limits.",
     },
     {
       number: "02",
-      title: "Configure Reliability Test",
-      desc: "Set up failure scenarios like latency injection or timeouts.",
+      title: "Add a public endpoint",
+      desc: "Paste an https URL. Private/localhost targets are blocked for safety.",
     },
     {
       number: "03",
-      title: "Inject Failures",
-      desc: "Safely execute faults in a controlled environment.",
+      title: "Run a live probe",
+      desc: "Watch SSE progress, latency, and pass/fail land in your history.",
     },
     {
       number: "04",
       title: "Analyze with AI",
-      desc: "Get automated RCA and recommended actions for resilience.",
+      desc: "Get structured risk levels, insights, and recommended actions.",
     },
   ];
 

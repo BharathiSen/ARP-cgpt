@@ -57,8 +57,8 @@ export default function Hero() {
               textShadow: "0 2px 20px rgba(0,0,0,0.8)",
             }}
           >
-            Simulate failures, stress test endpoints, and analyze system
-            behavior with AI-powered insights.
+            Probe public APIs, stream live latency into your dashboard, and get
+            AI-powered reliability insights you can act on.
           </p>
 
           {/* CTAs */}

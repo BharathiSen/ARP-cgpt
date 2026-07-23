@@ -6,22 +6,22 @@ import { Target, Zap, BarChart3 } from "lucide-react";
 const steps = [
   {
     icon: Target,
-    title: "Configure Scenario",
-    desc: "Define your API endpoint, set the expected latency threshold, and choose your failure injection rate.",
+    title: "Pick an endpoint",
+    desc: "Create a project and paste a public https URL you want to probe (for example httpbin.org).",
     step: "01",
     color: "#00C8FF",
   },
   {
     icon: Zap,
-    title: "Execute Simulation",
-    desc: "Our engine performs real-world stress testing, injecting faults and measuring performance in real-time.",
+    title: "Run a live probe",
+    desc: "We send a real HTTP request, stream progress over SSE, and record latency plus status.",
     step: "02",
     color: "#4DEBFF",
   },
   {
     icon: BarChart3,
-    title: "Analyze Insights",
-    desc: "Receive deep-dive reports on how your system degrades. Identify single points of failure instantly.",
+    title: "Read AI insights",
+    desc: "Get a structured risk level, insights, and recommended actions based on the run.",
     step: "03",
     color: "#00C8FF",
   },

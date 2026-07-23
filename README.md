@@ -1,50 +1,103 @@
 # ⚡ API Reliability Lab
 
-**[🚀 View Live Demo](https://arp-cgpt.vercel.app/)**
+**[🚀 Live demo](https://arp-cgpt.vercel.app/)**
 
 <p align="center">
   <img src="public/hero.png" alt="API Reliability Lab Platform Preview" width="100%" />
 </p>
 
-## 📖 The Problem
-APIs break, latency spikes, and debugging in production is chaotic. Most developers only discover system bottlenecks or timeout failures *after* their customers complain. Finding out how your system behaves under stress shouldn't require a catastrophic outage.
+## What this project is (honest version)
 
-## 💡 My Solution
-**API Reliability Lab** is a full-stack SaaS platform designed to safely simulate API failures and stress-test endpoints before they reach production. It actively probes your endpoints, streams real-time latency metrics, and leverages AI to provide structured, actionable insights on how to improve your system's resilience.
+**API Reliability Lab** is a full-stack SaaS demo that:
 
-## 🏗️ Architecture Explanation
-The platform is built on modern serverless architecture:
-- **Frontend & Backend:** Next.js 14 App Router unifies the React frontend and server-side API Route Handlers.
-- **Real-Time Streaming:** Server-Sent Events (SSE) stream simulation logs and live latency charts directly to the dashboard without heavy WebSocket server requirements.
-- **Data Layer:** Prisma ORM manages relationship schemas for multi-tenant users, subscriptions, and historical simulation data inside PostgreSQL.
-- **Caching & Observability:** Redis acts as a high-speed caching layer and system health probe, minimizing database reads for frequent queries.
+1. Lets you sign up and create projects
+2. Probes a **public** HTTP(S) endpoint (real `GET` request)
+3. Streams live progress into the dashboard with **Server-Sent Events (SSE)**
+4. Saves run history in **PostgreSQL**
+5. Returns **AI structured insights** (or a safe fallback if no OpenAI key)
+6. Supports **API keys**, rate limits (Free 10/min · Pro 100/min), Redis cache, Docker, and CI
 
-## 🛠️ Tech Stack
-- **Framework:** Next.js 14 (App Router), React 18, TypeScript
-- **Database / ORM:** PostgreSQL, Prisma ORM
-- **Cache / Performance:** Redis (Upstash & ioredis)
-- **Authentication:** NextAuth.js (Auth.js) with custom Credentials & JWT
-- **DevOps & Hosting:** Vercel (Serverless Deployment), Docker (Local DB Dev), GitHub Actions (CI Pipeline)
-- **UI / Styling:** Tailwind CSS, Framer Motion, Recharts (Data Visualization), Lucide React (Icons), React Hot Toast
-- **Integrations:** Resend (Triggered Emails) and Sentry (Observability)
+It does **not** inject artificial failures, run a CLI, or do large-scale load testing yet. Those are future ideas — the product matches the marketing copy.
 
-## 🧗‍♂️ Challenges Overcome
-1. **Real-Time Delivery:** Sending live latency test results to the frontend without hanging normal HTTP requests. Solved by implementing native Next.js Server-Sent Events (SSE).
-2. **Predictable AI Outputs:** LLMs often return messy text. Solved by strictly enforcing `zod` schemas through the OpenAI SDK to return guaranteed JSON formats for risk levels and confidence scores.
-3. **Database Performance:** Fetching historical latency graphs was causing full table scans. Solved by optimizing the Prisma schema with targeted `@@index` constraints for O(1) query lookups.
+## Why it exists
 
----
+APIs get slow or break. This app is a portfolio-ready way to measure that early: probe → stream → store → explain with AI.
 
-### Run Locally
+## Architecture (simple)
+
+```
+Browser (dashboard)
+   │
+   ├─ Next.js pages (marketing + login + dashboard)
+   │
+   └─ API routes
+         ├─ Auth (NextAuth credentials + JWT)
+         ├─ Projects (Postgres via Prisma)
+         ├─ Simulate / SSE stream
+         │     ├─ ownership check (your project only)
+         │     ├─ SSRF URL safety (no localhost / private IPs)
+         │     ├─ fetch public endpoint
+         │     └─ AI analysis (Zod-shaped JSON)
+         └─ Redis (optional cache + rate limits)
+```
+
+## Tech stack
+
+- **Next.js 14** App Router, React 18, TypeScript
+- **PostgreSQL** + **Prisma**
+- **Redis** (Upstash REST and/or `REDIS_URL`)
+- **NextAuth** (credentials + JWT)
+- **Vercel AI SDK** + OpenAI (optional)
+- **Razorpay** (optional Pro upgrade)
+- **Resend**, **Sentry**, Docker, GitHub Actions
+
+## Challenges I solved
+
+1. **Live updates without WebSockets** — SSE streams probe progress on serverless-friendly hosting.
+2. **Predictable AI JSON** — Zod schemas keep risk levels / insights structured.
+3. **Security basics for a probe tool** — SSRF blocking + project ownership checks so users cannot hit private networks or write into someone else’s project.
+
+## Run locally
+
 ```bash
-# 1. Clone & Install
+# 1. Install
 npm install
 
-# 2. Setup Database
+# 2. Env file
+cp .env.example .env.local
+# edit DATABASE_URL, NEXTAUTH_SECRET, NEXTAUTH_URL
+
+# 3. Database (+ Redis optional)
 docker-compose up -d
 npx prisma generate
 npx prisma db push
 
-# 3. Run Development Server
+# 4. Dev server
 npm run dev
 ```
+
+Open [http://localhost:3000](http://localhost:3000) → Sign up → Dashboard → keep the default `https://httpbin.org/get` → Run.
+
+### Useful scripts
+
+| Command | What it does |
+|---------|----------------|
+| `npm run dev` | Local app |
+| `npm run build` | Production build |
+| `npm run test` | Unit tests (SSRF, ownership helper, auth helpers) |
+| `npm run lint` | ESLint |
+
+## Plans
+
+| Plan | Access | Rate limit |
+|------|--------|------------|
+| Free | Full dashboard | 10 requests / minute |
+| Pro | Same features | 100 requests / minute via verified Razorpay |
+
+There is **no** fake “Pay Securely” unlock. `/api/upgrade` is disabled on purpose.
+
+## Security notes for reviewers
+
+- Endpoints must be `http`/`https` and resolve to public IPs
+- Simulations require the `projectId` to belong to the current user
+- Admin emails come from `ADMIN_EMAIL` / `ADMIN_EMAILS` or `User.isAdmin` in the DB — not hardcoded addresses

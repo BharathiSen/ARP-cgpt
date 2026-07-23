@@ -2,7 +2,8 @@ import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import prisma from "@/lib/prisma";
-import bcrypt from "bcryptjs";
+import { verifyPassword } from "@/lib/passwords";
+import { isConfiguredAdminEmail } from "@/lib/adminEmails";
 
 import type { Adapter } from "next-auth/adapters";
 
@@ -17,16 +18,6 @@ type AppSessionUser = {
   isAdmin?: boolean;
   isPaid?: boolean;
 };
-
-/** Admin emails from ADMIN_EMAILS / ADMIN_EMAIL (comma-separated). No hardcoded addresses. */
-function isConfiguredAdminEmail(email: string): boolean {
-  const raw = process.env.ADMIN_EMAILS ?? process.env.ADMIN_EMAIL ?? "";
-  const allowed = raw
-    .split(",")
-    .map((value) => value.trim().toLowerCase())
-    .filter(Boolean);
-  return allowed.includes(email.trim().toLowerCase());
-}
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma) as Adapter,
@@ -59,7 +50,7 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
-        const isPasswordValid = await bcrypt.compare(
+        const isPasswordValid = await verifyPassword(
           providedPassword,
           user.password,
         );

@@ -1,31 +1,32 @@
-import { ShieldAlert, Activity, BrainCircuit, BarChart3 } from "lucide-react";
+import { Activity, BrainCircuit, BarChart3, Radio } from "lucide-react";
 
+/** Feature cards — only claim what the product actually does today. */
 export const features = [
   {
-    title: "Failure Simulation",
+    title: "Live Endpoint Probes",
     description:
-      "Inject faults safely into your API endpoints to see how your system reacts to real-world outages.",
-    icon: ShieldAlert,
-    gradient: "from-[#00C8FF] to-[#4DEBFF]",
-  },
-  {
-    title: "Load Testing Engine",
-    description:
-      "Stress test endpoints to uncover bottlenecks and scale limits before your users do.",
+      "Send a real HTTP request to your public API and measure whether it succeeds and how long it takes.",
     icon: Activity,
     gradient: "from-[#00C8FF] to-[#4DEBFF]",
   },
   {
-    title: "AI Log Diagnostics",
+    title: "Realtime SSE Streaming",
     description:
-      "Connect your logs and let our AI core detect anomalies, predict failures, and suggest fixes.",
+      "Watch progress, latency, and completion events stream into the dashboard as the probe runs.",
+    icon: Radio,
+    gradient: "from-[#00C8FF] to-[#4DEBFF]",
+  },
+  {
+    title: "AI Reliability Insights",
+    description:
+      "Turn status codes and latency into structured risk levels, insights, and recommended actions.",
     icon: BrainCircuit,
     gradient: "from-[#00C8FF] to-[#4DEBFF]",
   },
   {
-    title: "Reliability Metrics",
+    title: "History & Metrics",
     description:
-      "Track latency distribution, retry patterns, and error rates in real-time dashboards.",
+      "Keep per-project run history, charts, summaries, and exportable JSON reports for later review.",
     icon: BarChart3,
     gradient: "from-[#00C8FF] to-[#4DEBFF]",
   },

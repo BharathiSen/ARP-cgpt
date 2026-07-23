@@ -7,33 +7,33 @@ import { Code2, Server, Globe, ShieldCheck, Cpu, Terminal } from "lucide-react";
 const cases = [
   {
     icon: Server,
-    title: "Microservices Stress",
-    desc: "Stress test internal endpoints and downstream dependencies.",
+    title: "Public API smoke checks",
+    desc: "Confirm a deployed endpoint responds and measure baseline latency.",
   },
   {
     icon: ShieldCheck,
-    title: "Vulnerability Scanning",
-    desc: "Identify potential security leaks during reliability simulations.",
+    title: "Safe probe boundaries",
+    desc: "SSRF guards block localhost, private IPs, and cloud metadata targets.",
   },
   {
     icon: Globe,
-    title: "Global Performance",
-    desc: "Simulate worldwide latency for globally distributed systems.",
+    title: "Portfolio demos",
+    desc: "Show recruiters a live SaaS loop: auth, probe, chart, AI summary.",
   },
   {
     icon: Terminal,
-    title: "CI/CD Gatekeeping",
-    desc: "Run reliability tests as part of your deployment pipelines.",
+    title: "API key workflows",
+    desc: "Call POST /api/simulate from curl with a Bearer key you generate.",
   },
   {
     icon: Cpu,
-    title: "Compute-Intensive API",
-    desc: "Monitor CPU usage vs performance under fault injection.",
+    title: "Latency debugging",
+    desc: "Compare runs over time to spot slowdowns before users complain.",
   },
   {
     icon: Code2,
-    title: "API Gateway Testing",
-    desc: "Ensure your gateways handle high error rates gracefully.",
+    title: "Learning full-stack SaaS",
+    desc: "Study auth, Postgres, Redis, SSE, and AI structured outputs in one app.",
   },
 ];
 
